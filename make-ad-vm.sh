@@ -1,22 +1,37 @@
 #!/bin/sh
 
 # lots of parameters to set or override
-VM_IMG_DIR=${VM_IMG_DIR:-/export1/kvmimages}
+VM_IMG_DIR=${VM_IMG_DIR:-/var/lib/libvirt/images}
 ANS_FLOPPY=${ANS_FLOPPY:-$VM_IMG_DIR/answerfloppy.vfd}
-ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad}
+ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
 FLOPPY_MNT=${FLOPPY_MNT:-/mnt/floppy}
 WIN_VER_REL_ARCH=${WIN_VER_REL_ARCH:-win2k8x8664}
 WIN_ISO=${WIN_ISO:-$VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso}
-WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/ad.raw}
 # windows server needs lots of ram, cpu, disk
 VM_RAM=${VM_RAM:-2048}
 VM_CPUS=${VM_CPUS:-2}
 VM_DISKSIZE=${VM_DISKSIZE:-16}
 VM_NAME=${VM_NAME:-ad}
+WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.raw}
+ADMINNAME=${ADMINNAME:-Administrator}
 
-if [ -z "$AD_ROOTPW" ] ; then
-    echo Error: you must supply the password for $AD_ROOTDN
-    echo in the AD_ROOTPW environment variable
+# fix .in files
+do_subst()
+{
+    sed -e "s/@ADMINPASSWORD@/$ADMINPASSWORD/g" \
+        -e "s/@DOMAINNAME@/$VM_AD_DOMAIN/g" \
+        -e "s/@ADMINNAME@/$ADMINNAME/g" \
+        -e "s/@VM_AD_DOMAIN@/$VM_AD_DOMAIN/g" \
+        -e "s/@VM_NETBIOS_NAME@/$VM_NETBIOS_NAME/g" \
+        -e "s/@VM_NAME@/$VM_NAME/g" \
+        -e "s/@VM_FQDN@/$VM_FQDN/g" \
+        -e "s/@PRODUCT_KEY@/$PRODUCT_KEY/g" \
+        $1
+}
+
+if [ -z "$ADMINPASSWORD" ] ; then
+    echo Error: you must supply the password for $ADMINNAME
+    echo in the ADMINPASSWORD environment variable
     exit 1
 fi
 
@@ -47,32 +62,43 @@ fi
 # now that we have the fqdn, construct our suffix
 lmhn=`echo $VM_FQDN | sed -e 's/^\([^.]*\).*$/\1/'`
 domain=`echo $VM_FQDN | sed -e 's/^[^.]*\.//'`
-lmdn=`echo $domain | sed -e 's/^\([^.]*\).*$/\1/'`
-suffix=`echo $domain | sed -e 's/^/dc=/' -e 's/\./,dc=/g'`
+VM_AD_DOMAIN=${VM_AD_DOMAIN:-"$domain"}
+lmdn=`echo $VM_AD_DOMAIN | sed -e 's/^\([^.]*\).*$/\1/'`
+suffix=`echo $VM_AD_DOMAIN | sed -e 's/^/dc=/' -e 's/\./,dc=/g'`
+netbios=`echo $VM_AD_DOMAIN | sed -e 's/\.//g' | tr '[a-z]' '[A-Z]'`
 VM_CA_NAME=${VM_CA_NAME:-"$lmdn-$lmhn-ca"}
 VM_AD_SUFFIX=${VM_AD_SUFFIX:-"$suffix"}
-AD_ROOTDN=${AD_ROOTDN:-"cn=administrator,cn=users,$VM_AD_SUFFIX"}
-
+VM_NETBIOS_NAME=${VM_NETBIOS_NAME:-"$netbios"}
+ADMIN_DN=${ADMIN_DN:-"cn=$ADMINNAME,cn=users,$VM_AD_SUFFIX"}
 
 if [ ! -f $ANS_FLOPPY ] ; then
-    mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $! from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
+    mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
 fi
 
 if [ ! -d $FLOPPY_MNT ] ; then
-    mkdir -p $FLOPPY_MNT || { echo error $! from mkdir -p $FLOPPY_MNT ; exit 1 ; }
-
+    mkdir -p $FLOPPY_MNT || { echo error $? from mkdir -p $FLOPPY_MNT ; exit 1 ; }
 fi
 
-mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $! from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
+mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $? from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
 
-cp $ANS_FILE_DIR/$WIN_VER_REL_ARCH.xml $FLOPPY_MNT/autounattend.xml || { echo error $! from cp $ANS_FILE_DIR/$WIN_VER_REL_ARCH.xml $FLOPPY_MNT/autounattend.xml ; umount $FLOPPY_MNT ; exit 1 ; }
-
-# convert to DOS format to make it easier to read on windows
-for file in adcertreq.inf setuppass3.cmd setuppass2.cmd dcinstall.ini postinstall.cmd specialize.cmd Setupca.vbs SetupComplete.cmd audituser.cmd ; do
-    sed 's/$//' $ANS_FILE_DIR/$file > $FLOPPY_MNT/$file || { echo error $! from sed $ANS_FILE_DIR/$file to $FLOPPY_MNT/$file  ; umount $FLOPPY_MNT ; exit 1 ; }
+# replace .in files with the real data
+# convert to DOS format to make them easier to read in Windows
+for file in $ANS_FILE_DIR/* ; do
+    err=
+    case $file in
+    *$WIN_VER_REL_ARCH.xml*) outfile=$FLOPPY_MNT/autounattend.xml ;;
+    *) outfile=$FLOPPY_MNT/`basename $file .in` ;;
+    esac
+    case $file in
+    *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
+    *) sed 's/$//' $file > $outfile || err=$? ;;
+    esac
+    if [ -n "$err" ] ; then
+        echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+    fi
 done
 
-umount $FLOPPY_MNT || { echo error $! from umount $FLOPPY_MNT ; exit 1 ; }
+umount $FLOPPY_MNT || { echo error $? from umount $FLOPPY_MNT ; exit 1 ; }
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
@@ -83,7 +109,7 @@ virt-install --connect=qemu:///system --hvm \
     --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=raw,cache=none \
     --disk path=$ANS_FLOPPY,device=floppy \
     --network=bridge=virbr0,model=rtl8139,mac=$VM_MAC \
-    $VI_DEBUG --noautoconsole || { echo error $! from virt-install ; exit 1 ; }
+    $VI_DEBUG --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
 
 echo now we wait for everything to be set up
 TRIES=100
@@ -110,7 +136,7 @@ CA_CERT_DN="cn=$VM_CA_NAME,cn=certification authorities,cn=public key services,c
 
 TMP_CACERT=/tmp/cacert.`date +'%Y%m%d%H%M%S'`.$$.pem
 echo "-----BEGIN CERTIFICATE-----" > $TMP_CACERT
-ldapsearch -xLLL -H ldap://$VM_FQDN -D "$AD_ROOTDN" -w "$AD_ROOTPW" -s base -b "$CA_CERT_DN" "objectclass=*" cACertificate | perl -p0e 's/\n //g' | sed -e '/^cACertificate/ { s/^cACertificate:: //; s/\(.\{1,64\}\)/\1\n/g; p }' -e 'd' | grep -v '^$' >> $TMP_CACERT
+ldapsearch -xLLL -H ldap://$VM_FQDN -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base -b "$CA_CERT_DN" "objectclass=*" cACertificate | perl -p0e 's/\n //g' | sed -e '/^cACertificate/ { s/^cACertificate:: //; s/\(.\{1,64\}\)/\1\n/g; p }' -e 'd' | grep -v '^$' >> $TMP_CACERT
 echo "-----END CERTIFICATE-----" >> $TMP_CACERT
 
 echo Now test our CA cert

@@ -1,11 +1,11 @@
 [DCINSTALL]
-UserName=Administrator
-Password=Secret123
+UserName=@ADMINNAME@
+Password=@ADMINPASSWORD@
 ReplicaOrNewDomain=Domain
 NewDomain=Forest
-NewDomainDNSName=test.example.com
+NewDomainDNSName=@VM_AD_DOMAIN@
 ForestLevel=4
-DomainNetbiosName=TESTEXAMPLECOM
+DomainNetbiosName=@VM_NETBIOS_NAME@
 DomainLevel=4
 InstallDNS=Yes
 ConfirmGC=Yes
@@ -13,5 +13,5 @@ CreateDNSDelegation=No
 DatabasePath="C:\Windows\NTDS"
 LogPath="C:\Windows\NTDS"
 SYSVOLPath="C:\Windows\SYSVOL"
-SafeModeAdminPassword=Secret123
+SafeModeAdminPassword=@ADMINPASSWORD@
 RebootOnCompletion=No

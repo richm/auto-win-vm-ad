@@ -1,6 +1,6 @@
 echo these are commands to be run upon first login post installation
 rem echo activate windows with the product key
-rem cscript c:\Windows\System32\slmgr.vbs /ipk "the product key"
+rem cscript c:\Windows\System32\slmgr.vbs /ipk "@PRODUCT_KEY@"
 rem cscript c:\Windows\System32\slmgr.vbs /ato
 echo Setup AD as Domain Controller
 %SystemRoot%\System32\dcpromo.exe /unattend:a:\dcinstall.ini > c:\dcinstall.log 2>&1

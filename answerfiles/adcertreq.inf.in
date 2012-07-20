@@ -4,7 +4,7 @@ Signature="$Windows NT$"
 
 [NewRequest]
 
-Subject = "CN=ad.test.example.com"
+Subject = "CN=@VM_FQDN@"
 KeySpec = 1
 KeyLength = 2048
 ; Can be 1024, 2048, 4096, 8192, or 16384.

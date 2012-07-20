@@ -46,9 +46,8 @@
         <AcceptEula>true</AcceptEula>
 <!--
         <ProductKey>
-          <Key>GCRM3-DH8B8-49PTX-QRB6X-K28GD</Key>
+          <Key>@PRODUCT_KEY@</Key>
         </ProductKey>
-need real product key
 -->
       </UserData>
 <!--
@@ -91,7 +90,7 @@ need real product key
   </settings>
   <settings pass="specialize">
     <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-      <ComputerName>AD</ComputerName>
+      <ComputerName>@VM_NAME@</ComputerName>
     </component>
     <component name="Microsoft-Windows-Deployment" processorArchitecture="x86" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <RunSynchronous>
@@ -124,13 +123,13 @@ need real product key
     <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <UserAccounts>
         <AdministratorPassword>
-          <Value>Secret123</Value>
+          <Value>@ADMINPASSWORD@</Value>
           <PlainText>true</PlainText>
         </AdministratorPassword>
         <LocalAccounts>
           <LocalAccount wcm:action="add">
             <Password>
-              <Value>Secret123</Value>
+              <Value>@ADMINPASSWORD@</Value>
               <PlainText>true</PlainText>
             </Password>
             <Description>testadmin</Description>
@@ -142,12 +141,12 @@ need real product key
       </UserAccounts>
       <AutoLogon>
         <Password>
-          <Value>Secret123</Value>
+          <Value>@ADMINPASSWORD@</Value>
           <PlainText>true</PlainText>
         </Password>
         <Enabled>true</Enabled>
         <LogonCount>999</LogonCount>
-        <Username>Administrator</Username>
+        <Username>@ADMINNAME@</Username>
       </AutoLogon>
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
