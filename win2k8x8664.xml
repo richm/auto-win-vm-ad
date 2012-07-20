@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <DiskConfiguration>
+        <WillShowUI>OnError</WillShowUI>
+        <Disk>
+          <CreatePartitions>
+            <CreatePartition>
+              <Order>1</Order>
+              <Size>1</Size>
+              <Type>Primary</Type>
+            </CreatePartition>
+          </CreatePartitions>
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <ModifyPartitions>
+            <ModifyPartition>
+              <Active>true</Active>
+              <Extend>true</Extend>
+              <Format>NTFS</Format>
+              <Label>C drive</Label>
+              <Letter>C</Letter>
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>1</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>1</PartitionID>
+          </InstallTo>
+          <WillShowUI>OnError</WillShowUI>
+        </OSImage>
+      </ImageInstall>
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+<!--
+        <ProductKey>
+          <Key>GCRM3-DH8B8-49PTX-QRB6X-K28GD</Key>
+        </ProductKey>
+need real product key
+-->
+      </UserData>
+<!--
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+-->
+<!--
+          <Credentials>
+            <Username>Administrator</Username>
+            <Password>Secret123</Password>
+          </Credentials>
+-->
+<!--
+          <Description>Setup AD as Domain Controller</Description>
+          <Order>1</Order>
+          <Path>%SystemRoot%\System32\dcpromo.exe /unattend:a:\dcinstall.ini</Path>
+-->
+<!--          <WillReboot>OnRequest</WillReboot>
+2012-07-17 14:31:27, Error                        [setup.exe] SMI data results dump: Source = Name: Microsoft-Windows-Setup, Language: neutral, ProcessorArchitecture: amd64, PublicKeyToken: 31bf3856ad364e35, VersionScope: nonSxS, /settings/RunSynchronous/RunSynchronousCommand/[Order="1"]/WillReboot
+          2012-07-17 14:31:27, Error                        [setup.exe] SMI data results dump: Description = Setting is not defined in this component.
+-->    
+<!--
+        </RunSynchronousCommand>
+      </RunSynchronous>
+-->
+      <Display>
+        <ColorDepth>32</ColorDepth>
+        <HorizontalResolution>1024</HorizontalResolution>
+        <VerticalResolution>768</VerticalResolution>
+      </Display>
+    </component>
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <SetupUILanguage>
+        <UILanguage>en-US</UILanguage>
+      </SetupUILanguage>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+  </settings>
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <ComputerName>AD</ComputerName>
+    </component>
+    <component name="Microsoft-Windows-Deployment" processorArchitecture="x86" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Description>Run Specialization commands</Description>
+          <Order>1</Order>
+          <Path>cmd /c a:\specialize.cmd > c:\specialize.log 2>&1</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+  <settings pass="auditUser"> 
+    <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"> 
+      <RunSynchronous> 
+        <RunSynchronousCommand wcm:action="add"> 
+          <Order>1</Order> 
+          <Path>cmd /c a:\audituser.cmd > c:\audituser.log 2>&1</Path> 
+        </RunSynchronousCommand> 
+      </RunSynchronous> 
+    </component> 
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"> 
+      <Display> 
+        <ColorDepth>32</ColorDepth> 
+        <HorizontalResolution>1024</HorizontalResolution> 
+        <VerticalResolution>768</VerticalResolution> 
+      </Display> 
+    </component> 
+  </settings>
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <UserAccounts>
+        <AdministratorPassword>
+          <Value>Secret123</Value>
+          <PlainText>true</PlainText>
+        </AdministratorPassword>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Password>
+              <Value>Secret123</Value>
+              <PlainText>true</PlainText>
+            </Password>
+            <Description>testadmin</Description>
+            <DisplayName>testadmin</DisplayName>
+            <Group>Administrators;Power Users</Group>
+            <Name>testadmin</Name>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+      <AutoLogon>
+        <Password>
+          <Value>Secret123</Value>
+          <PlainText>true</PlainText>
+        </Password>
+        <Enabled>true</Enabled>
+        <LogonCount>999</LogonCount>
+        <Username>Administrator</Username>
+      </AutoLogon>
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <CommandLine>cmd /c a:\postinstall.cmd > c:\postinstall.log 2>&1</CommandLine>
+          <Order>1</Order>
+          <Description>Run Post-Install commands</Description>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+      <RegisteredOwner/>
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+      <Display>
+        <ColorDepth>32</ColorDepth>
+        <HorizontalResolution>1024</HorizontalResolution>
+        <VerticalResolution>768</VerticalResolution>
+      </Display>
+    </component>
+  </settings>
+</unattend>
