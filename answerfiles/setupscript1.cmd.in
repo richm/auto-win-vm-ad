@@ -1,0 +1,3 @@
+echo Setup AD as Domain Controller
+%SystemRoot%\System32\dcpromo.exe /unattend:@SETUP_PATH@\dcinstall.ini > c:\dcinstall.log 2>&1
+@SETUP_PATH@\nextscript.cmd 2 "Reboot to complete Active Directory setup"

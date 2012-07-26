@@ -1,0 +1,4 @@
+echo do this just after AD has been set up
+echo Install Standalone Root CA
+cscript @SETUP_PATH@\Setupca.vbs /IS
+@SETUP_PATH@\nextscript.cmd 3 "Reboot to complete Cert Services setup"

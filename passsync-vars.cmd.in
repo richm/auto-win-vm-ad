@@ -1,0 +1,5 @@
+set DS_FQDN=vmhost.testdomain.com
+set PASSSYNC_PW=Secret123
+set DS_PORT=1389
+set DS_SUFFIX=dc=testdomain,dc=com
+set PASSSYNC_DN=cn=directory manager

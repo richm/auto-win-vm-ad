@@ -63,7 +63,7 @@
 <!--
           <Description>Setup AD as Domain Controller</Description>
           <Order>1</Order>
-          <Path>%SystemRoot%\System32\dcpromo.exe /unattend:a:\dcinstall.ini</Path>
+          <Path>%SystemRoot%\System32\dcpromo.exe /unattend:@SETUP_PATH@\dcinstall.ini</Path>
 -->
 <!--          <WillReboot>OnRequest</WillReboot>
 2012-07-17 14:31:27, Error                        [setup.exe] SMI data results dump: Source = Name: Microsoft-Windows-Setup, Language: neutral, ProcessorArchitecture: amd64, PublicKeyToken: 31bf3856ad364e35, VersionScope: nonSxS, /settings/RunSynchronous/RunSynchronousCommand/[Order="1"]/WillReboot
@@ -97,7 +97,7 @@
         <RunSynchronousCommand wcm:action="add">
           <Description>Run Specialization commands</Description>
           <Order>1</Order>
-          <Path>cmd /c a:\specialize.cmd > c:\specialize.log 2>&1</Path>
+          <Path>cmd /c @SETUP_PATH@\specialize.cmd > c:\specialize.log 2>&1</Path>
         </RunSynchronousCommand>
       </RunSynchronous>
     </component>
@@ -107,7 +107,7 @@
       <RunSynchronous> 
         <RunSynchronousCommand wcm:action="add"> 
           <Order>1</Order> 
-          <Path>cmd /c a:\audituser.cmd > c:\audituser.log 2>&1</Path> 
+          <Path>cmd /c @SETUP_PATH@\audituser.cmd > c:\audituser.log 2>&1</Path> 
         </RunSynchronousCommand> 
       </RunSynchronous> 
     </component> 
@@ -150,7 +150,7 @@
       </AutoLogon>
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
-          <CommandLine>cmd /c a:\postinstall.cmd > c:\postinstall.log 2>&1</CommandLine>
+          <CommandLine>cmd /c @SETUP_PATH@\postinstall.cmd > c:\postinstall.log 2>&1</CommandLine>
           <Order>1</Order>
           <Description>Run Post-Install commands</Description>
         </SynchronousCommand>

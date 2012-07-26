@@ -23,6 +23,7 @@ These are the tools I've used so far:
 ** libvirt-client - virsh
 ** dosfstools - mkfs.vfat
 ** openldap-clients - for testing the AD connection and getting the AD CA cert
+** genisoimage - "extras" CD
 
 * en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso
 ** an MSDN subscription is required for access to Windows ISO files

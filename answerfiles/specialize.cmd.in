@@ -3,4 +3,4 @@ echo these are commands run during the specialize phase of windows install
 echo better to use RunSynchronous in most cases
 echo create our SetupComplete.cmd
 md c:\windows\setup\scripts
-copy a:\SetupComplete.cmd c:\windows\setup\scripts
+copy @SETUP_PATH@\SetupComplete.cmd c:\windows\setup\scripts

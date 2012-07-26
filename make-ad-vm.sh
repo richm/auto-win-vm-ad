@@ -3,8 +3,8 @@
 # lots of parameters to set or override
 VM_IMG_DIR=${VM_IMG_DIR:-/var/lib/libvirt/images}
 ANS_FLOPPY=${ANS_FLOPPY:-$VM_IMG_DIR/answerfloppy.vfd}
-ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
 FLOPPY_MNT=${FLOPPY_MNT:-/mnt/floppy}
+ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
 WIN_VER_REL_ARCH=${WIN_VER_REL_ARCH:-win2k8x8664}
 WIN_ISO=${WIN_ISO:-$VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso}
 # windows server needs lots of ram, cpu, disk
@@ -14,6 +14,7 @@ VM_DISKSIZE=${VM_DISKSIZE:-16}
 VM_NAME=${VM_NAME:-ad}
 WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.raw}
 ADMINNAME=${ADMINNAME:-Administrator}
+SETUP_PATH=${SETUP_PATH:-"E:"}
 
 # fix .in files
 do_subst()
@@ -26,6 +27,7 @@ do_subst()
         -e "s/@VM_NAME@/$VM_NAME/g" \
         -e "s/@VM_FQDN@/$VM_FQDN/g" \
         -e "s/@PRODUCT_KEY@/$PRODUCT_KEY/g" \
+        -e "s/@SETUP_PATH@/$SETUP_PATH/g" \
         $1
 }
 
@@ -71,34 +73,64 @@ VM_AD_SUFFIX=${VM_AD_SUFFIX:-"$suffix"}
 VM_NETBIOS_NAME=${VM_NETBIOS_NAME:-"$netbios"}
 ADMIN_DN=${ADMIN_DN:-"cn=$ADMINNAME,cn=users,$VM_AD_SUFFIX"}
 
-if [ ! -f $ANS_FLOPPY ] ; then
-    mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
-fi
-
-if [ ! -d $FLOPPY_MNT ] ; then
-    mkdir -p $FLOPPY_MNT || { echo error $? from mkdir -p $FLOPPY_MNT ; exit 1 ; }
-fi
-
-mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $? from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
-
-# replace .in files with the real data
-# convert to DOS format to make them easier to read in Windows
-for file in $ANS_FILE_DIR/* ; do
-    err=
-    case $file in
-    *$WIN_VER_REL_ARCH.xml*) outfile=$FLOPPY_MNT/autounattend.xml ;;
-    *) outfile=$FLOPPY_MNT/`basename $file .in` ;;
-    esac
-    case $file in
-    *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
-    *) sed 's/$//' $file > $outfile || err=$? ;;
-    esac
-    if [ -n "$err" ] ; then
-        echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+if [ -n "$USE_FLOPPY" ] ; then
+    if [ ! -f $ANS_FLOPPY ] ; then
+        mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
     fi
-done
 
-umount $FLOPPY_MNT || { echo error $? from umount $FLOPPY_MNT ; exit 1 ; }
+    if [ ! -d $FLOPPY_MNT ] ; then
+        mkdir -p $FLOPPY_MNT || { echo error $? from mkdir -p $FLOPPY_MNT ; exit 1 ; }
+    fi
+
+    mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $? from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
+
+    # replace .in files with the real data
+    # convert to DOS format to make them easier to read in Windows
+    for file in $ANS_FILE_DIR/* ; do
+        err=
+        case $file in
+            *$WIN_VER_REL_ARCH.xml*) outfile=$FLOPPY_MNT/autounattend.xml ;;
+            *) outfile=$FLOPPY_MNT/`basename $file .in` ;;
+        esac
+        case $file in
+            *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
+            *) sed 's/$//' $file > $outfile || err=$? ;;
+        esac
+        if [ -n "$err" ] ; then
+            echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+        fi
+    done
+
+    umount $FLOPPY_MNT || { echo error $? from umount $FLOPPY_MNT ; exit 1 ; }
+    VI_FLOPPY="--disk path=$ANS_FLOPPY,device=floppy"
+else
+    # just put everything on the CD
+    # first need a staging area
+    staging=`mktemp -d`
+    for file in $ANS_FILE_DIR/* "$@" ; do
+        err=
+        case $file in
+            *$WIN_VER_REL_ARCH.xml*) outfile=$staging/autounattend.xml ;;
+            *) outfile=$staging/`basename $file .in` ;;
+        esac
+        case $file in
+            *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
+            *.vbs|*.cmd|*.txt|*.inf|*.ini|*.xml) sed 's/$//' $file > $outfile || err=$? ;;
+            # just assume everything else is binary or we don't want to convert it
+            *) cp -p $file $outfile || err=$? ;;
+        esac
+        if [ -n "$err" ] ; then
+            echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+        fi
+    done
+    EXTRAS_CD_ISO=${EXTRAS_CD_ISO:-$VM_IMG_DIR/$VM_NAME-extra-cdrom.iso}
+    rm -f $EXTRAS_CD_ISO
+    genisoimage -iso-level 4 -J -l -R -o $EXTRAS_CD_ISO $staging/* || { echo Error $? from genisoimage $EXTRAS_CD_ISO $staging/* ; exit 1 ; }
+    if [ -n "$VI_DEBUG" ] ; then
+        rm -rf $staging
+    fi
+    VI_EXTRAS_CD="--disk path=$EXTRAS_CD_ISO,device=cdrom"
+fi
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
@@ -107,7 +139,7 @@ virt-install --connect=qemu:///system --hvm \
     --cdrom $WIN_ISO --vnc --os-type windows  \
     --serial file,path=$serialpath --serial pty \
     --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=raw,cache=none \
-    --disk path=$ANS_FLOPPY,device=floppy \
+    $VI_FLOPPY $VI_EXTRAS_CD \
     --network=bridge=virbr0,model=rtl8139,mac=$VM_MAC \
     $VI_DEBUG --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
 
@@ -146,4 +178,9 @@ else
     echo Error: the CA cert in $TMP_CACERT is not working
     LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H ldap://$VM_FQDN -s base -b "" currenttime
     exit 1
+fi
+
+if [ -n "$WIN_CA_CERT_FILE" ] ; then
+    cp -p $TMP_CACERT $WIN_CA_CERT_FILE
+    rm -f $TMP_CACERT
 fi

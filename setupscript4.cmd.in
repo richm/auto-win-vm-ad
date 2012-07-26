@@ -1,0 +1,15 @@
+call @SETUP_PATH@\passsync-vars.cmd
+for %%i in (@SETUP_PATH@\*PassSync*.msi) do msiexec /i %%i /quiet /passive /log c:\passsync-msi.log
+reg add HKLM\Software\PasswordSync /f /v "Host Name" /t REG_SZ /d %DS_FQDN%
+reg add HKLM\Software\PasswordSync /f /v "Password" /t REG_SZ /d "%PASSSYNC_PW%"
+reg add HKLM\Software\PasswordSync /f /v "Port Number" /t REG_SZ /d %DS_PORT%
+reg add HKLM\Software\PasswordSync /f /v "Search Base" /t REG_SZ /d "%DS_SUFFIX%"
+reg add HKLM\Software\PasswordSync /f /v "User Name" /t REG_SZ /d "%PASSSYNC_DN%"
+
+setlocal ENABLEEXTENSIONS
+for /f "skip=2 tokens=1-3*" %%a in ('reg query HKLM\Software\PasswordSync /v "Install Path"') do set instpath=%%d
+cd "%instpath%"
+certutil.exe -d . -A -n "DS CA cert" -t CT,, -a -i @SETUP_PATH@\ds-ca-cert.cer
+certutil.exe -d . -L -n "DS CA cert"
+
+@SETUP_PATH@\nextscript.cmd 5 "Reboot to complete PassSync installation"
