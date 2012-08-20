@@ -19,13 +19,14 @@ SETUP_PATH=${SETUP_PATH:-"E:"}
 # fix .in files
 do_subst()
 {
-    sed -e "s/@ADMINPASSWORD@/$ADMINPASSWORD/g" \
+    $SUDOCMD sed -e "s/@ADMINPASSWORD@/$ADMINPASSWORD/g" \
         -e "s/@DOMAINNAME@/$VM_AD_DOMAIN/g" \
         -e "s/@ADMINNAME@/$ADMINNAME/g" \
         -e "s/@VM_AD_DOMAIN@/$VM_AD_DOMAIN/g" \
         -e "s/@VM_NETBIOS_NAME@/$VM_NETBIOS_NAME/g" \
         -e "s/@VM_NAME@/$VM_NAME/g" \
         -e "s/@VM_FQDN@/$VM_FQDN/g" \
+        -e "s/@VM_AD_SUFFIX@/$VM_AD_SUFFIX/g" \
         -e "s/@PRODUCT_KEY@/$PRODUCT_KEY/g" \
         -e "s/@SETUP_PATH@/$SETUP_PATH/g" \
         $1
@@ -39,7 +40,7 @@ fi
 
 if [ -z "$VM_MAC" ] ; then
     # try to get the mac addr from virsh
-    VM_MAC=`virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*mac='\([^']*\)'.*$/\1/"`
+    VM_MAC=`$SUDOCMD virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*mac='\([^']*\)'.*$/\1/"`
     if [ -z "$VM_MAC" ] ; then
         echo Error: your machine $VM_MAC has no mac address in virsh net-dumpxml default
         echo Please use virsh net-edit default to specify the mac address for $VM_MAC
@@ -50,7 +51,7 @@ fi
 
 if [ -z "$VM_FQDN" ] ; then
     # try to get the ip addr from virsh
-    VM_IP=`virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*ip='\([^']*\)'.*$/\1/"`
+    VM_IP=`$SUDOCMD virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*ip='\([^']*\)'.*$/\1/"`
     if [ -z "$VM_IP" ] ; then
         echo Error: your machine $VM_NAME has no IP address in virsh net-dumpxml default
         echo Please use virsh net-edit default to specify the IP address for $VM_NAME
@@ -75,14 +76,14 @@ ADMIN_DN=${ADMIN_DN:-"cn=$ADMINNAME,cn=users,$VM_AD_SUFFIX"}
 
 if [ -n "$USE_FLOPPY" ] ; then
     if [ ! -f $ANS_FLOPPY ] ; then
-        mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
+        $SUDOCMD mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
     fi
 
     if [ ! -d $FLOPPY_MNT ] ; then
-        mkdir -p $FLOPPY_MNT || { echo error $? from mkdir -p $FLOPPY_MNT ; exit 1 ; }
+        $SUDOCMD mkdir -p $FLOPPY_MNT || { echo error $? from mkdir -p $FLOPPY_MNT ; exit 1 ; }
     fi
 
-    mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $? from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
+    $SUDOCMD mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT || { echo error $? from mount -o loop -t vfat $ANS_FLOPPY $FLOPPY_MNT ; exit 1 ; }
 
     # replace .in files with the real data
     # convert to DOS format to make them easier to read in Windows
@@ -93,15 +94,15 @@ if [ -n "$USE_FLOPPY" ] ; then
             *) outfile=$FLOPPY_MNT/`basename $file .in` ;;
         esac
         case $file in
-            *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
-            *) sed 's/$//' $file > $outfile || err=$? ;;
+            *.in) do_subst $file | $SUDOCMD sed 's/$//' > $outfile || err=$? ;;
+            *) $SUDOCMD sed 's/$//' $file > $outfile || err=$? ;;
         esac
         if [ -n "$err" ] ; then
-            echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+            echo error $err copying $file to $outfile  ; $SUDOCMD umount $FLOPPY_MNT ; exit 1
         fi
     done
 
-    umount $FLOPPY_MNT || { echo error $? from umount $FLOPPY_MNT ; exit 1 ; }
+    $SUDOCMD umount $FLOPPY_MNT || { echo error $? from umount $FLOPPY_MNT ; exit 1 ; }
     VI_FLOPPY="--disk path=$ANS_FLOPPY,device=floppy"
 else
     # just put everything on the CD
@@ -114,18 +115,18 @@ else
             *) outfile=$staging/`basename $file .in` ;;
         esac
         case $file in
-            *.in) do_subst $file | sed 's/$//' > $outfile || err=$? ;;
-            *.vbs|*.cmd|*.txt|*.inf|*.ini|*.xml) sed 's/$//' $file > $outfile || err=$? ;;
+            *.in) do_subst $file | $SUDOCMD sed 's/$//' > $outfile || err=$? ;;
+            *.vbs|*.cmd|*.txt|*.inf|*.ini|*.xml) $SUDOCMD sed 's/$//' $file > $outfile || err=$? ;;
             # just assume everything else is binary or we don't want to convert it
-            *) cp -p $file $outfile || err=$? ;;
+            *) $SUDOCMD cp -p $file $outfile || err=$? ;;
         esac
         if [ -n "$err" ] ; then
-            echo error $err copying $file to $outfile  ; umount $FLOPPY_MNT ; exit 1
+            echo error $err copying $file to $outfile  ; exit 1
         fi
     done
     EXTRAS_CD_ISO=${EXTRAS_CD_ISO:-$VM_IMG_DIR/$VM_NAME-extra-cdrom.iso}
-    rm -f $EXTRAS_CD_ISO
-    genisoimage -iso-level 4 -J -l -R -o $EXTRAS_CD_ISO $staging/* || { echo Error $? from genisoimage $EXTRAS_CD_ISO $staging/* ; exit 1 ; }
+    $SUDOCMD rm -f $EXTRAS_CD_ISO
+    $SUDOCMD genisoimage -iso-level 4 -J -l -R -o $EXTRAS_CD_ISO $staging/* || { echo Error $? from genisoimage $EXTRAS_CD_ISO $staging/* ; exit 1 ; }
     if [ -n "$VI_DEBUG" ] ; then
         rm -rf $staging
     fi
@@ -134,7 +135,7 @@ fi
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
-virt-install --connect=qemu:///system --hvm \
+$SUDOCMD virt-install --connect=qemu:///system --hvm \
     --accelerate --name "$VM_NAME" --ram=$VM_RAM --vcpu=$VM_CPUS \
     --cdrom $WIN_ISO --vnc --os-type windows  \
     --serial file,path=$serialpath --serial pty \
@@ -147,9 +148,11 @@ echo now we wait for everything to be set up
 TRIES=100
 SLEEPTIME=30
 ii=0
+SETUPCOMPLETEDN="cn=SetupComplete,cn=Users,$VM_AD_SUFFIX"
 while [ $ii -lt $TRIES ] ; do
-    # this search will only return success if AD is TLS enabled
-    if LDAPTLS_REQCERT=never ldapsearch -xLLL -ZZ -H ldap://$VM_FQDN -s base -b "" currenttime > /dev/null 2>&1 ; then
+    # this will only return success if AD is TLS enabled and the setup complete entry is available
+    if LDAPTLS_REQCERT=never ldapdelete -x -ZZ -H ldap://$VM_FQDN \
+        -D "$ADMIN_DN" -w "$ADMINPASSWORD" "$SETUPCOMPLETEDN" > /dev/null 2>&1 ; then
         echo Server is running and configured
         break
     else
@@ -168,15 +171,21 @@ CA_CERT_DN="cn=$VM_CA_NAME,cn=certification authorities,cn=public key services,c
 
 TMP_CACERT=/tmp/cacert.`date +'%Y%m%d%H%M%S'`.$$.pem
 echo "-----BEGIN CERTIFICATE-----" > $TMP_CACERT
-ldapsearch -xLLL -H ldap://$VM_FQDN -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base -b "$CA_CERT_DN" "objectclass=*" cACertificate | perl -p0e 's/\n //g' | sed -e '/^cACertificate/ { s/^cACertificate:: //; s/\(.\{1,64\}\)/\1\n/g; p }' -e 'd' | grep -v '^$' >> $TMP_CACERT
+ldapsearch -xLLL -H ldap://$VM_FQDN -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base \
+    -b "$CA_CERT_DN" "objectclass=*" cACertificate | perl -p0e 's/\n //g' | \
+    sed -e '/^cACertificate/ { s/^cACertificate:: //; s/\(.\{1,64\}\)/\1\n/g; p }' -e 'd' | \
+    grep -v '^$' >> $TMP_CACERT
 echo "-----END CERTIFICATE-----" >> $TMP_CACERT
 
 echo Now test our CA cert
-if LDAPTLS_CACERT=$TMP_CACERT ldapsearch -xLLL -ZZ -H ldap://$VM_FQDN -s base -b "" currenttime > /dev/null 2>&1 ; then
+if LDAPTLS_CACERT=$TMP_CACERT ldapsearch -xLLL -ZZ -H ldap://$VM_FQDN \
+    -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base -b "" \
+    "objectclass=*" currenttime > /dev/null 2>&1 ; then
     echo Success - the CA cert in $TMP_CACERT is working
 else
     echo Error: the CA cert in $TMP_CACERT is not working
-    LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H ldap://$VM_FQDN -s base -b "" currenttime
+    LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H ldap://$VM_FQDN -s base \
+        -b "" "objectclass=*" currenttime
     exit 1
 fi
 
@@ -184,3 +193,5 @@ if [ -n "$WIN_CA_CERT_FILE" ] ; then
     cp -p $TMP_CACERT $WIN_CA_CERT_FILE
     rm -f $TMP_CACERT
 fi
+
+exit 0

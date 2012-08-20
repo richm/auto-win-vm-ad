@@ -1,0 +1,3 @@
+echo add a special user entry to let clients know setup is complete
+dsadd user "cn=SetupComplete,cn=users,@VM_AD_SUFFIX@"
+echo setup is complete
