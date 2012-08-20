@@ -1,0 +1,3 @@
+echo install the posix attributes
+ServerManagerCmd.exe -install ADDS-Identity-Mgmt
+@SETUP_PATH@\nextscript.cmd 6 "Reboot to complete enabling POSIX attributes"
