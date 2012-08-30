@@ -5,3 +5,4 @@ set DS_SUFFIX=dc=testdomain,dc=com
 set PASSSYNC_DN=cn=directory manager
 set PASSSYNC_PWATTR=userPassword
 set PASSSYNC_LOGLEVEL=0
+set PASSSYNC_TTL=3600000

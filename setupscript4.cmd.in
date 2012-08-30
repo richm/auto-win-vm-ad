@@ -7,6 +7,7 @@ reg add HKLM\Software\PasswordSync /f /v "Search Base" /t REG_SZ /d "%DS_SUFFIX%
 reg add HKLM\Software\PasswordSync /f /v "User Name" /t REG_SZ /d "%PASSSYNC_DN%"
 reg add HKLM\Software\PasswordSync /f /v "Password Field" /t REG_SZ /d %PASSSYNC_PWATTR%
 reg add HKLM\Software\PasswordSync /f /v "Log Level" /t REG_SZ /d %PASSSYNC_LOGLEVEL%
+reg add HKLM\Software\PasswordSync /f /v "Time To Live" /t REG_SZ /d %PASSSYNC_TTL%
 
 setlocal ENABLEEXTENSIONS
 for /f "skip=2 tokens=1-3*" %%a in ('reg query HKLM\Software\PasswordSync /v "Install Path"') do set instpath=%%d
