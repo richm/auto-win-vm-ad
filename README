@@ -42,9 +42,21 @@ These are the tools I've used so far:
  192.168.122.2 ad.test.example.com ad
 ** The FQDN must be the first one listed (just like for SSL/Kerberos
    testing)
-** virsh net-edit default - add a name, the IP address from above, and
-   a unique MAC address
-** This part can be automated too
+** add your new vm/ip addr/mac address
+*** virsh net-destroy default - virt network must be stopped first
+*** virsh net-edit default - add a name, the IP address from above, and
+    a unique MAC address to the <dhcp> section like this:
+   <mac address='52:54:00:xx:xx:xx'/>
+   <ip address='192.168.122.1' netmask='255.255.255.0'>
+     <dhcp>
+       <range start='192.168.122.128' end='192.168.122.254' />
+       <host mac='54:52:00:xx:yy:zz' name='win2k8' ip='192.168.122.2' />
+   That is, add a new <host ...> entry with a unique IP address and mac address
+   The mac address must start with 54:52:00: and must be unique.
+   The VM name (name='win2k8') does not have to match the hostname, but it must be
+   the same as the VM_NAME parameter (see below)
+*** virsh net-start default - start up virt network
+*** virsh net-dumpxml default - verify that your new host entry is listed
 
 You will need to provide at least the name of the VM to the script.
 The script will attempt to find the FQDN, the IP address, and the MAC
