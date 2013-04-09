@@ -8,15 +8,15 @@ This allows you to create a Windows VM complete with Active Directory
 and Certificate Services, and Active Directory TLS/SSL enabled,
 completely automated and unattended.
 
-Currently only tested on (and hardcoded to work with) RHEL 6.3 with
-kvm/qemu virtualization and Windows Server 2008 R2 Enterprise
-Datacenter 64-bit.
+Currently only tested on (and hardcoded to work with) RHEL 6.X with
+kvm/qemu virtualization, Windows Server 2008 R2 Enterprise
+Datacenter 64-bit, and Windows Server 2012 Enterprise Datacenter 64-bit
 
 Pre-Requisites
 ==============
 
 These are the tools I've used so far:
-* RHEL 6.3 64-bit with KVM/QEMU
+* RHEL 6.x 64-bit with KVM/QEMU
 ** qemu-kvm - the basic virtualization packages
 ** python-virtinst - virt-install
 ** qemu-img
@@ -32,6 +32,13 @@ These are the tools I've used so far:
    and Certificate Services
 ** Not sure what other versions contain these
 ** autounattend.xml, dcinstall.ini, adcertreq.inf, and the cmd scripts
+   depend on this version
+* en_windows_server_2012_x64_dvd_915478.iso
+** an MSDN subscription is required for access to Windows ISO files
+   and product keys
+** I know 2012 Datacenter comes with Active Directory and Certificate Services
+** Not sure what other versions contain these
+** autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts
    depend on this version
 
 * KVM/Machine setup
@@ -68,11 +75,16 @@ Running
 ANS_FILE_DIR=/path/to/thisscript/answerfiles \
 VM_NAME=nameofvm \
 ADMINPASSWORD="your windows admin password" \
+PRODUCT_KEY=aaaaa-bbbbb-ccccc-ddddd-eeeee \
 make-ad-vm.sh
 
 There are many, many parameters you can pass as environment variables
+PRODUCT_KEY - 25 character product key which must correspond exactly to the windows iso you are installing
+* no default - must be provided or use PRODUCT_KEY_FILE
+PRODUCT_KEY_FILE - can put the product key in a file instead of passing in PRODUCT_KEY
+* no default - must be provided or use PRODUCT_KEY
 VM_NAME - name of virtual machine
-- default - ad
+* default - ad
 VM_IMG_DIR - path to your KVM/QEMU disk images
 * default - /var/lib/libvirt/images
 ANS_FILE_DIR - path to the config files and scripts used during Windows install/setup
@@ -114,6 +126,10 @@ VM_NETBIOS_NAME - the NETBIOS domain name
 * default - derived from VM_AD_DOMAIN e.g. test.example.com -> TESTEXAMPLECOM
 ADMIN_DN - the full AD DN of the Windows Administrator
 * default - cn=$ADMINNAME,cn=users,$VM_AD_SUFFIX
+AD_DOMAIN_LEVEL - 4 == 2008 R2, Win2012 == 2012
+* default - same as version specifed in WIN_VER_REL_ARCH
+AD_FOREST_LEVEL - 4 == 2008 R2, Win2012 == 2012
+* default - same as version specifed in WIN_VER_REL_ARCH
 
 Windows
 =======
@@ -121,8 +137,7 @@ Windows supports unattended install and setup.  In 2008 and some other
 new-ish versions, this is done via a file called autounattend.xml.
 When Windows boots off of the ISO, it looks for a file called
 autounattend.xml in the root directory of all removable media.  We use
-a virtual floppy drive (answerfloppy.vfd) as drive A:\ in Windows and
-put the file there.
+a virtual CD-ROM as drive E:\ in Windows and put the file there.
 
 Setup goes through several different phases, or "passes" in Windows
 parlance.  The last pass is oobeSystem.  It is during this pass that
@@ -130,43 +145,50 @@ we set the first of our "callback" scripts, postinstall.cmd.  We first
 set Windows to AutoLogin the Administrator so that we can use the
 FirstLogonCommands and later RunOnce commands, and tell it to
 AutoLogin 999 times.  We use the FirstLogonCommands SynchronousCommand
-to run the postinstall.cmd script.  This script uses dcpromo.exe to
-setup Active Directory with our chosen domain.  It also activates
-Windows with the specified product key.  At the end, it creates the
-RunOnce script for the next setup pass (setuppass2.cmd), and tells
-Windows to reboot in 2 minutes.  Active Directory requires a reboot in
-order to complete the setup process.
+to run the postinstall.cmd script.  This activates windows with the
+given PRODUCT_KEY, creates the RunOnce script for the next setup pass
+(setupscript1.cmd), and reboots.
 
-During the setuppass2 pass at next login, we install and configure
-Certificate Services in Standalone Root CA mode (setupca.vbs /IS),
-then set the RunOnce to run setuppass3.cmd, and reboot again in 2
-minutes.
+During setupscript1 pass, setupscript1.cmd uses dcpromo.exe (2008) or
+setupad.ps1 (2012) to setup Active Directory with our chosen domain.
+It also activates Windows with the specified product key.  At the end,
+it creates the RunOnce script for the next setup pass
+(setupscript1.cmd), and tells Windows to reboot in 2 minutes.  Active
+Directory requires a reboot in order to complete the setup process.
 
-During the setuppass3 pass at next login, we generate an AD server
+During the setupscript2 pass at next login, we install and configure
+Certificate Services in Standalone Root CA mode - setupca.vbs /IS
+(2008) or setupca.ps1 (2012) - then set the RunOnce to run
+setupscript.cmd, and reboot again in 2 minutes.
+
+During the setupscript3 pass at next login, we generate an AD server
 cert request, submit it to the CA, sign it, and install it in the AD
 cert repo, using certreq and certutil.  Once this is done, AD will
 automatically configure itself to be a TLS/SSL server.
 
 The different Windows files are:
-PLATFORM.xml - e.g. win2k8x8664.xml - this is copied to the virtual floppy disk as the main
+PLATFORM.xml - e.g. win2k8x8664.xml - this is copied to the virtual CD-ROM as the main
 autounattend.xml file
-postinstall.cmd - activate Windows with the specified product key, setup AD, setup pass2, reboot
-setuppass2.cmd - install and setup Cert Services, setup pass3, reboot
-setuppass3.cmd - request and install AD server cert
-dcinstall.ini - unattended setup file for AD
+postinstall.cmd - activate Windows with the specified product key, reboot
+setupscript2.cmd - install and setup AD, setup pass2, reboot
+setupscript2.cmd - install and setup Cert Services, setup pass3, reboot
+setupscript3.cmd - request and install AD server cert
+dcinstall.ini - unattended setup file for AD (2008)
 adcertreq.inf - unattended AD cert request file
-Setupca.vbs - Virtual Basic script that installs and sets up Cert Services
-otherfiles - currently unused
+Setupca.vbs - Virtual Basic script that installs and sets up Cert Services (2008)
+setupad.ps1 - unattended setup file for AD (2012)
+setupca.ps1 - unattended setup file for CA (2012)
 
 Windows Troubleshooting
 =======================
 For general setup issues, look in c:\windows\panther\setup*.log
 
-dcpromo - c:\dcinstall.log
-setupca.vbs - c:\_setupca.log
+dcpromo - c:\dcinstall.log (2008 only)
+setupca.vbs - c:\_setupca.log (2008 only)
 postinstall - c:\postinstall.log
-setuppass2 - c:\setuppass2.log
-setuppass3 - c:\setuppass3.log
+setupscript1 - c:\setupscript1.log
+setupscript2 - c:\setupscript2.log
+setupscript3 - c:\setupscript3.log
 
 References
 ==========
@@ -182,3 +204,5 @@ Windows certreq reference
 Source for Setupca.vbs
 * http://blogs.technet.com/b/pki/archive/2009/09/18/automated-ca-installs-using-vb-script-on-windows-server-2008-and-2008r2.aspx
 * http://technet.microsoft.com/en-us/library/ee918754(WS.10).aspx
+Info for 2012 Active Directory
+* http://technet.microsoft.com/en-us/library/hh472162.aspx
