@@ -4,12 +4,15 @@
 VM_IMG_DIR=${VM_IMG_DIR:-/var/lib/libvirt/images}
 ANS_FLOPPY=${ANS_FLOPPY:-$VM_IMG_DIR/answerfloppy.vfd}
 FLOPPY_MNT=${FLOPPY_MNT:-/mnt/floppy}
-ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
 WIN_VER_REL_ARCH=${WIN_VER_REL_ARCH:-win2k8x8664}
+ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
+PRODUCT_KEY_FILE=${PRODUCT_KEY_FILE:-$ANS_FILE_DIR/$WIN_VER_REL_ARCH.key}
 WIN_ISO=${WIN_ISO:-$VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso}
 # windows server needs lots of ram, cpu, disk
+# size in MB
 VM_RAM=${VM_RAM:-2048}
 VM_CPUS=${VM_CPUS:-2}
+# size in GB
 VM_DISKSIZE=${VM_DISKSIZE:-16}
 VM_NAME=${VM_NAME:-ad}
 WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.raw}
@@ -36,6 +39,10 @@ if [ -z "$ADMINPASSWORD" ] ; then
     echo Error: you must supply the password for $ADMINNAME
     echo in the ADMINPASSWORD environment variable
     exit 1
+fi
+
+if [ -z "$PRODUCT_KEY" -a -f $PRODUCT_KEY_FILE ] ; then
+    read PRODUCT_KEY < $PRODUCT_KEY_FILE
 fi
 
 if [ -z "$VM_MAC" ] ; then
@@ -87,7 +94,11 @@ if [ -n "$USE_FLOPPY" ] ; then
 
     # replace .in files with the real data
     # convert to DOS format to make them easier to read in Windows
-    for file in $ANS_FILE_DIR/* ; do
+    # files in answerfiles/winverrel/ will override files in answerfiles/ if
+    # they have the same name - this allow to provide version specific files
+    # to override the more general ones in answerfiles/
+    for file in $ANS_FILE_DIR/* $ANS_FILE_DIR/$WIN_VER_REL_ARCH/* "$@" ; do
+        if [ ! -f "$file" ] ; then continue ; fi
         err=
         case $file in
             *$WIN_VER_REL_ARCH.xml*) outfile=$FLOPPY_MNT/autounattend.xml ;;
@@ -107,8 +118,12 @@ if [ -n "$USE_FLOPPY" ] ; then
 else
     # just put everything on the CD
     # first need a staging area
+    # files in answerfiles/winverrel/ will override files in answerfiles/ if
+    # they have the same name - this allow to provide version specific files
+    # to override the more general ones in answerfiles/
     staging=`mktemp -d`
-    for file in $ANS_FILE_DIR/* "$@" ; do
+    for file in $ANS_FILE_DIR/* $ANS_FILE_DIR/$WIN_VER_REL_ARCH/* "$@" ; do
+        if [ ! -f "$file" ] ; then continue ; fi
         err=
         case $file in
             *$WIN_VER_REL_ARCH.xml*) outfile=$staging/autounattend.xml ;;
@@ -127,7 +142,7 @@ else
     EXTRAS_CD_ISO=${EXTRAS_CD_ISO:-$VM_IMG_DIR/$VM_NAME-extra-cdrom.iso}
     $SUDOCMD rm -f $EXTRAS_CD_ISO
     $SUDOCMD genisoimage -iso-level 4 -J -l -R -o $EXTRAS_CD_ISO $staging/* || { echo Error $? from genisoimage $EXTRAS_CD_ISO $staging/* ; exit 1 ; }
-    if [ -n "$VI_DEBUG" ] ; then
+    if [ -z "$VI_DEBUG" ] ; then
         rm -rf $staging
     fi
     VI_EXTRAS_CD="--disk path=$EXTRAS_CD_ISO,device=cdrom"
