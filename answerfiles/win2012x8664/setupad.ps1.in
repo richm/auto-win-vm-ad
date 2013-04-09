@@ -1,0 +1,2 @@
+Install-windowsfeature -name AD-Domain-Services -IncludeManagementTools
+Install-ADDSForest -DomainName @VM_AD_DOMAIN@ -SafeModeAdministratorPassword (convertto-securestring "@ADMINPASSWORD@" -asplaintext -force) -CreateDNSDelegation:$false -NoDNSOnNetwork:$true -DomainMode @AD_DOMAIN_LEVEL@ -DomainNetBIOSName @VM_NETBIOS_NAME@ -ForestMode @AD_FOREST_LEVEL@ -InstallDNS:$true -NoRebootOnCompletion:$true -Force

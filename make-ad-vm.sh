@@ -32,6 +32,8 @@ do_subst()
         -e "s/@VM_AD_SUFFIX@/$VM_AD_SUFFIX/g" \
         -e "s/@PRODUCT_KEY@/$PRODUCT_KEY/g" \
         -e "s/@SETUP_PATH@/$SETUP_PATH/g" \
+        -e "s/@AD_FOREST_LEVEL@/$AD_FOREST_LEVEL/g" \
+        -e "s/@AD_DOMAIN_LEVEL@/$AD_DOMAIN_LEVEL/g" \
         $1
 }
 
@@ -80,6 +82,17 @@ VM_CA_NAME=${VM_CA_NAME:-"$lmdn-$lmhn-ca"}
 VM_AD_SUFFIX=${VM_AD_SUFFIX:-"$suffix"}
 VM_NETBIOS_NAME=${VM_NETBIOS_NAME:-"$netbios"}
 ADMIN_DN=${ADMIN_DN:-"cn=$ADMINNAME,cn=users,$VM_AD_SUFFIX"}
+
+if [ -z "$AD_FOREST_LEVEL" -o -z "$AD_DOMAIN_LEVEL" ] ; then
+    case $WIN_VER_REL_ARCH in
+    win2k8*) AD_FOREST_LEVEL=${AD_FOREST_LEVEL:-4}
+             AD_DOMAIN_LEVEL=${AD_DOMAIN_LEVEL:-4} ;;
+    win2012*) AD_FOREST_LEVEL=${AD_FOREST_LEVEL:-Win2012}
+              AD_DOMAIN_LEVEL=${AD_DOMAIN_LEVEL:-Win2012} ;;
+    *) echo Error: unknown windows version $WIN_VER_REL_ARCH
+       echo Please set AD_FOREST_LEVEL and AD_DOMAIN_LEVEL ;;
+    esac
+fi
 
 if [ -n "$USE_FLOPPY" ] ; then
     if [ ! -f $ANS_FLOPPY ] ; then
