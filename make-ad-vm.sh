@@ -1,5 +1,12 @@
 #!/bin/sh
 
+CONF=${CONF:-$1}
+CONF=${CONF:-vm.conf}
+
+if [ -f $CONF ] ; then
+    . $CONF
+fi
+
 # lots of parameters to set or override
 VM_IMG_DIR=${VM_IMG_DIR:-/var/lib/libvirt/images}
 ANS_FLOPPY=${ANS_FLOPPY:-$VM_IMG_DIR/answerfloppy.vfd}
@@ -15,7 +22,7 @@ VM_CPUS=${VM_CPUS:-2}
 # size in GB
 VM_DISKSIZE=${VM_DISKSIZE:-16}
 VM_NAME=${VM_NAME:-ad}
-WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.raw}
+WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.qcow2}
 ADMINNAME=${ADMINNAME:-Administrator}
 SETUP_PATH=${SETUP_PATH:-"E:"}
 
@@ -47,7 +54,14 @@ if [ -z "$PRODUCT_KEY" -a -f $PRODUCT_KEY_FILE ] ; then
     read PRODUCT_KEY < $PRODUCT_KEY_FILE
 fi
 
-if [ -z "$VM_MAC" ] ; then
+if [ -z "$PRODUCT_KEY" ] ; then
+    case $WIN_VER_REL_ARCH in
+    win2012*) echo Error: Windows 2012 requires a product key for installation ; exit 1 ;;
+    esac
+fi
+
+VM_NETWORK=bridge=virbr0,model=rtl8139
+if [ -z "$VM_NO_MAC" -a -z "$VM_MAC" ] ; then
     # try to get the mac addr from virsh
     VM_MAC=`$SUDOCMD virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*mac='\([^']*\)'.*$/\1/"`
     if [ -z "$VM_MAC" ] ; then
@@ -56,6 +70,7 @@ if [ -z "$VM_MAC" ] ; then
         echo or set VM_MAC=mac:addr in the environment
         exit 1
     fi
+    VM_NETWORK=${VM_NETWORK},mac=$VM_MAC
 fi
 
 if [ -z "$VM_FQDN" ] ; then
@@ -155,6 +170,21 @@ else
     EXTRAS_CD_ISO=${EXTRAS_CD_ISO:-$VM_IMG_DIR/$VM_NAME-extra-cdrom.iso}
     $SUDOCMD rm -f $EXTRAS_CD_ISO
     $SUDOCMD genisoimage -iso-level 4 -J -l -R -o $EXTRAS_CD_ISO $staging/* || { echo Error $? from genisoimage $EXTRAS_CD_ISO $staging/* ; exit 1 ; }
+    # this does not work - causes windows to display an error dialog if set not complete
+    # also get this error:
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] In-use cached unattend file for [oobeSystem] is still present at [C:\Windows\panther\unattend.xml].
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] Running oobeSystem pass with discovered unattend file [C:\Windows\panther\unattend.xml]...
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] Caching copy of unattend file: [C:\Windows\panther\unattend.xml] -- cached at --> [C:\Windows\panther\unattend.xml]
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] Source and destination paths are identical; skipping file copy.
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] Cached unattend file, returned: [%windir%\panther\unattend.xml]
+# 2014-06-05 10:40:55, Info                         [oobeldr.exe] Current pass status for [oobeSystem] is [0x1]
+# 2014-06-05 10:40:55, Error                        [oobeldr.exe] Pass has failed status; system is in an invalid state.
+
+    # if [ -f $WIN_VM_DISKFILE ] ; then
+    #     # write the autounattend.xml to c:\Windows\Panther\unattend.xml
+    #     $SUDOCMD cp -p $staging/autounattend.xml $staging/unattend.xml
+    #     $SUDOCMD virt-copy-in -a $WIN_VM_DISKFILE $staging/unattend.xml /Windows/Panther
+    # fi
     if [ -z "$VI_DEBUG" ] ; then
         rm -rf $staging
     fi
@@ -163,13 +193,17 @@ fi
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
+if [ ! -f $WIN_VM_DISKFILE ] ; then
+    VM_CDROM="--cdrom $WIN_ISO"
+fi
+
 $SUDOCMD virt-install --connect=qemu:///system --hvm \
     --accelerate --name "$VM_NAME" --ram=$VM_RAM --vcpu=$VM_CPUS \
-    --cdrom $WIN_ISO --vnc --os-type windows  \
+    $VM_CDROM --vnc --os-type windows  \
     --serial file,path=$serialpath --serial pty \
-    --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=raw,cache=none \
+    --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=qcow2,cache=none \
     $VI_FLOPPY $VI_EXTRAS_CD \
-    --network=bridge=virbr0,model=rtl8139,mac=$VM_MAC \
+    --network=$VM_NETWORK \
     $VI_DEBUG --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
 
 echo now we wait for everything to be set up
@@ -177,9 +211,20 @@ TRIES=100
 SLEEPTIME=30
 ii=0
 SETUPCOMPLETEDN="cn=SetupComplete,cn=Users,$VM_AD_SUFFIX"
+if [ -n "$VM_NO_MAC" ] ; then
+    # there is no resolvable fqdn for the new host - grab the
+    # mac from the domain, then grab the ip from arp
+    macaddr=`$SUDOCMD virsh dumpxml "$VM_NAME"|awk -F"[ =']+" '/mac address/ {print $4}'`
+    ipaddr=`arp -e|awk '/'"$macaddr"'/ {print $1}'`
+    LDAPURL="ldap://$ipaddr"
+    LDAPREQCERT=never
+else
+    LDAPURL="ldap://$VM_FQDN"
+    LDAPREQCERT=demand
+fi
 while [ $ii -lt $TRIES ] ; do
     # this will only return success if AD is TLS enabled and the setup complete entry is available
-    if LDAPTLS_REQCERT=never ldapdelete -x -ZZ -H ldap://$VM_FQDN \
+    if LDAPTLS_REQCERT=never ldapdelete -x -ZZ -H $LDAPURL \
         -D "$ADMIN_DN" -w "$ADMINPASSWORD" "$SETUPCOMPLETEDN" > /dev/null 2>&1 ; then
         echo Server is running and configured
         break
@@ -199,20 +244,20 @@ CA_CERT_DN="cn=$VM_CA_NAME,cn=certification authorities,cn=public key services,c
 
 TMP_CACERT=/tmp/cacert.`date +'%Y%m%d%H%M%S'`.$$.pem
 echo "-----BEGIN CERTIFICATE-----" > $TMP_CACERT
-ldapsearch -xLLL -H ldap://$VM_FQDN -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base \
+ldapsearch -xLLL -H $LDAPURL -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base \
     -b "$CA_CERT_DN" "objectclass=*" cACertificate | perl -p0e 's/\n //g' | \
     sed -e '/^cACertificate/ { s/^cACertificate:: //; s/\(.\{1,64\}\)/\1\n/g; p }' -e 'd' | \
     grep -v '^$' >> $TMP_CACERT
 echo "-----END CERTIFICATE-----" >> $TMP_CACERT
 
 echo Now test our CA cert
-if LDAPTLS_CACERT=$TMP_CACERT ldapsearch -xLLL -ZZ -H ldap://$VM_FQDN \
+if LDAPTLS_REQCERT=$LDAPREQCERT LDAPTLS_CACERT=$TMP_CACERT ldapsearch -xLLL -ZZ -H $LDAPURL \
     -D "$ADMIN_DN" -w "$ADMINPASSWORD" -s base -b "" \
     "objectclass=*" currenttime > /dev/null 2>&1 ; then
     echo Success - the CA cert in $TMP_CACERT is working
 else
     echo Error: the CA cert in $TMP_CACERT is not working
-    LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H ldap://$VM_FQDN -s base \
+    LDAPTLS_REQCERT=$LDAPREQCERT LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H $LDAPURL -s base \
         -b "" "objectclass=*" currenttime
     exit 1
 fi
