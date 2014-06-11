@@ -8,15 +8,17 @@ This allows you to create a Windows VM complete with Active Directory
 and Certificate Services, and Active Directory TLS/SSL enabled,
 completely automated and unattended.
 
-Currently only tested on (and hardcoded to work with) RHEL 6.X with
+Currently only tested on RHEL 6.X and Fedora 20 with
 kvm/qemu virtualization, Windows Server 2008 R2 Enterprise
 Datacenter 64-bit, and Windows Server 2012 Enterprise Datacenter 64-bit
+
+Now supports using Windows disk images, including with backing images.
 
 Pre-Requisites
 ==============
 
 These are the tools I've used so far:
-* RHEL 6.x 64-bit with KVM/QEMU
+* RHEL 6.x and Fedora 20 64-bit with KVM/QEMU
 ** qemu-kvm - the basic virtualization packages
 ** python-virtinst - virt-install
 ** qemu-img
@@ -24,6 +26,7 @@ These are the tools I've used so far:
 ** dosfstools - mkfs.vfat
 ** openldap-clients - for testing the AD connection and getting the AD CA cert
 ** genisoimage - "extras" CD
+** virt-win-reg, virt-cat
 
 * en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso
 ** an MSDN subscription is required for access to Windows ISO files
@@ -40,8 +43,19 @@ These are the tools I've used so far:
 ** Not sure what other versions contain these
 ** autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts
    depend on this version
+* Windows Server 2008 image files
+** See http://www.freeipa.org/page/Setting_up_Active_Directory_domain_for_testing_purposes
+** NOTE: This script basically automates those steps
+** Use 'unar' instead of 'unrar' on Fedora 20
 
 * KVM/Machine setup
+** In addition to the below, you can create a new virtual network with
+   (e.g. virsh net-define and net-start), and pass in the name of the
+   network using VM_NETWORK_NAME
+   - advantage - no messing around with your system
+   - disadvantage - host resolution doesn't just work automatically
+                    need to use the IP address of the network e.g.
+                    $ dig @192.168.122.1 ad.domain.local
 ** In order to easily keep track of the VM hostname/IP address I have
    done the following:
 ** edit /etc/hosts - assign an IP address and FQDN for the VM
@@ -72,13 +86,13 @@ address (or you can provide these).
 Running
 =======
 
-ANS_FILE_DIR=/path/to/thisscript/answerfiles \
-VM_NAME=nameofvm \
-ADMINPASSWORD="your windows admin password" \
-PRODUCT_KEY=aaaaa-bbbbb-ccccc-ddddd-eeeee \
-make-ad-vm.sh
+1) Create your config file using the variables listed below
+2) make-ad-vm.sh windows.conf
 
-There are many, many parameters you can pass as environment variables
+There are many, many parameters you can pass as environment variables or
+in a config file.  Parameters passed in the environment override those
+in a config file.
+
 PRODUCT_KEY - 25 character product key which must correspond exactly to the windows iso you are installing
 * no default - must be provided or use PRODUCT_KEY_FILE
 PRODUCT_KEY_FILE - can put the product key in a file instead of passing in PRODUCT_KEY
@@ -88,14 +102,18 @@ VM_NAME - name of virtual machine
 VM_IMG_DIR - path to your KVM/QEMU disk images
 * default - /var/lib/libvirt/images
 ANS_FILE_DIR - path to the config files and scripts used during Windows install/setup
-* no default - you must provide this
+* default - `dirname $0`/answerfiles
 WIN_VER_REL_ARCH - windows version, release, arch
 * default - win2k8x8664
 * must correspond to the WIN_ISO
 WIN_ISO - the full path and file name of the Windows install ISO
 * default - $VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso
 WIN_VM_DISKFILE - the full path and file name of the Windows VM disk image
-* default - $VM_IMG_DIR/$VM_NAME.raw
+* default - $VM_IMG_DIR/$VM_NAME.qcow2
+WIN_VM_DISKFILE_BACKING - use this as the backing file for WIN_VM_DISKFILE
+* no default - if you specify this, then this will be the read-onlh "base"
+* image, and WIN_VM_DISKFILE will be the writable image, containing only
+* the changes
 VM_RAM - amount of RAM to use for VM, in MB
 * default - 2048 (2GB)
 VM_CPUS - number of CPUs to use for VM
@@ -117,7 +135,7 @@ VM_CA_NAME - the name of the CA that will be created
 ** LMHN is the leftmost part of the FQDN e.g. if your VM_FQDN is ad.test.example.com
 ** then the LMHN is "ad"
 ** so the VM_CA_NAME would be test-ad-ca
-VM_AD_DOMAIN - the domain of the AD server
+VM_DOMAIN - the domain of the AD server
 * default - the part of VM_FQDN after the hostname part e.g. if VM_FQDN is ad.test.example.com
 * the domain is test.example.com
 VM_AD_SUFFIX - the AD root suffix
@@ -148,6 +166,12 @@ AutoLogin 999 times.  We use the FirstLogonCommands SynchronousCommand
 to run the postinstall.cmd script.  This activates windows with the
 given PRODUCT_KEY, creates the RunOnce script for the next setup pass
 (setupscript1.cmd), and reboots.
+
+When using a disk image that has already been setup, it may still run
+the oobe phase.  The sample ad.conf file shows how to use virt-win-reg
+to set the registry after the disk image has been created, to tell
+setup to use the unattend.xml we provide, which will complete the
+unattended setup.
 
 During setupscript1 pass, setupscript1.cmd uses dcpromo.exe (2008) or
 setupad.ps1 (2012) to setup Active Directory with our chosen domain.

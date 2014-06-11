@@ -1,3 +1,2 @@
-echo add a special user entry to let clients know setup is complete
-dsadd user "cn=SetupComplete,cn=users,@VM_AD_SUFFIX@"
+copy @SETUP_PATH@\nextscript.cmd @VM_WAIT_FILE@
 echo setup is complete

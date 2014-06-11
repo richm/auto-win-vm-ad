@@ -1,20 +1,24 @@
 #!/bin/sh
 
-CONF=${CONF:-$1}
-CONF=${CONF:-vm.conf}
+set -o errexit
 
-if [ -f $CONF ] ; then
-    . $CONF
+for file in "$@" ; do
+    . $file
+done
+
+if [ -n "$VM_DEBUG" ] ; then
+    set -x
 fi
 
+MAKE_AD_VM_DIR=${MAKE_AD_VM_DIR:-`dirname $0`}
 # lots of parameters to set or override
 VM_IMG_DIR=${VM_IMG_DIR:-/var/lib/libvirt/images}
 ANS_FLOPPY=${ANS_FLOPPY:-$VM_IMG_DIR/answerfloppy.vfd}
 FLOPPY_MNT=${FLOPPY_MNT:-/mnt/floppy}
 WIN_VER_REL_ARCH=${WIN_VER_REL_ARCH:-win2k8x8664}
-ANS_FILE_DIR=${ANS_FILE_DIR:-/share/auto-win-vm-ad/answerfiles}
+ANS_FILE_DIR=${ANS_FILE_DIR:-$MAKE_AD_VM_DIR/answerfiles}
 PRODUCT_KEY_FILE=${PRODUCT_KEY_FILE:-$ANS_FILE_DIR/$WIN_VER_REL_ARCH.key}
-WIN_ISO=${WIN_ISO:-$VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso}
+#WIN_ISO=${WIN_ISO:-$VM_IMG_DIR/en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso}
 # windows server needs lots of ram, cpu, disk
 # size in MB
 VM_RAM=${VM_RAM:-2048}
@@ -30,18 +34,43 @@ SETUP_PATH=${SETUP_PATH:-"E:"}
 do_subst()
 {
     $SUDOCMD sed -e "s/@ADMINPASSWORD@/$ADMINPASSWORD/g" \
-        -e "s/@DOMAINNAME@/$VM_AD_DOMAIN/g" \
+        -e "s/@DOMAINNAME@/$VM_DOMAIN/g" \
         -e "s/@ADMINNAME@/$ADMINNAME/g" \
-        -e "s/@VM_AD_DOMAIN@/$VM_AD_DOMAIN/g" \
+        -e "s/@VM_AD_DOMAIN@/$VM_DOMAIN/g" \
         -e "s/@VM_NETBIOS_NAME@/$VM_NETBIOS_NAME/g" \
         -e "s/@VM_NAME@/$VM_NAME/g" \
         -e "s/@VM_FQDN@/$VM_FQDN/g" \
         -e "s/@VM_AD_SUFFIX@/$VM_AD_SUFFIX/g" \
         -e "s/@PRODUCT_KEY@/$PRODUCT_KEY/g" \
         -e "s/@SETUP_PATH@/$SETUP_PATH/g" \
+        -e "s/@VM_WAIT_FILE@/$VM_WAIT_FILE/g" \
         -e "s/@AD_FOREST_LEVEL@/$AD_FOREST_LEVEL/g" \
         -e "s/@AD_DOMAIN_LEVEL@/$AD_DOMAIN_LEVEL/g" \
         $1
+}
+
+wait_for_completion() {
+    # $VM_NAME $VM_TIMEOUT $VM_WAIT_FILE
+    # wait up to VM_TIMEOUT minutes for VM_NAME to be
+    # done with installation - this method uses
+    # virt-ls to look for a file in the vm - when
+    # the file is present, installation/setup is
+    # complete - keep polling every minute until
+    # the file is found or we hit the timeout
+    slash='\\'
+    # wait_file uses windows style paths, but
+    # virt-ls needs *nix style paths
+    my_wait_file=`echo "$VM_WAIT_FILE" | tr "$slash" /`
+    ii=$VM_TIMEOUT
+    while [ $ii -gt 0 ] ; do
+        if $SUDOCMD virt-cat -d $VM_NAME "$my_wait_file" > /dev/null 2>&1 ; then
+            return 0
+        fi
+        ii=`expr $ii - 1`
+        sleep 60
+    done
+    echo Error: $VM_NAME $VM_WAIT_FILE not found after $VM_TIMEOUT minutes
+    return 1
 }
 
 if [ -z "$ADMINPASSWORD" ] ; then
@@ -60,25 +89,30 @@ if [ -z "$PRODUCT_KEY" ] ; then
     esac
 fi
 
-VM_NETWORK=bridge=virbr0,model=rtl8139
+VM_NETWORK_NAME=${VM_NETWORK_NAME:-default}
+VM_NETWORK=${VM_NETWORK:-"network=$VM_NETWORK_NAME,model=rtl8139"}
+#VM_NETWORK=bridge=virbr0,model=rtl8139
 if [ -z "$VM_NO_MAC" -a -z "$VM_MAC" ] ; then
     # try to get the mac addr from virsh
-    VM_MAC=`$SUDOCMD virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*mac='\([^']*\)'.*$/\1/"`
+    VM_MAC=`$SUDOCMD virsh net-dumpxml $VM_NETWORK_NAME | grep "'"$VM_NAME"'"|sed "s/^.*mac='\([^']*\)'.*$/\1/"`
     if [ -z "$VM_MAC" ] ; then
-        echo Error: your machine $VM_MAC has no mac address in virsh net-dumpxml default
-        echo Please use virsh net-edit default to specify the mac address for $VM_MAC
+        echo Error: your machine $VM_MAC has no mac address in virsh net-dumpxml $VM_NETWORK_NAME
+        echo Please use virsh net-edit $VM_NETWORK_NAME to specify the mac address for $VM_MAC
         echo or set VM_MAC=mac:addr in the environment
         exit 1
     fi
-    VM_NETWORK=${VM_NETWORK},mac=$VM_MAC
+fi
+
+if [ -n "$VM_MAC" ] ; then
+    VM_NETWORK="$VM_NETWORK,mac=$VM_MAC"
 fi
 
 if [ -z "$VM_FQDN" ] ; then
     # try to get the ip addr from virsh
-    VM_IP=`$SUDOCMD virsh net-dumpxml default | grep "'"$VM_NAME"'"|sed "s/^.*ip='\([^']*\)'.*$/\1/"`
+    VM_IP=`$SUDOCMD virsh net-dumpxml $VM_NETWORK_NAME | grep "'"$VM_NAME"'"|sed "s/^.*ip='\([^']*\)'.*$/\1/"`
     if [ -z "$VM_IP" ] ; then
-        echo Error: your machine $VM_NAME has no IP address in virsh net-dumpxml default
-        echo Please use virsh net-edit default to specify the IP address for $VM_NAME
+        echo Error: your machine $VM_NAME has no IP address in virsh net-dumpxml $VM_NETWORK_NAME
+        echo Please use virsh net-edit $VM_NETWORK_NAME to specify the IP address for $VM_NAME
         echo or set VM_FQDN=full.host.domain in the environment
         exit 1
     fi
@@ -89,10 +123,10 @@ fi
 # now that we have the fqdn, construct our suffix
 lmhn=`echo $VM_FQDN | sed -e 's/^\([^.]*\).*$/\1/'`
 domain=`echo $VM_FQDN | sed -e 's/^[^.]*\.//'`
-VM_AD_DOMAIN=${VM_AD_DOMAIN:-"$domain"}
-lmdn=`echo $VM_AD_DOMAIN | sed -e 's/^\([^.]*\).*$/\1/'`
-suffix=`echo $VM_AD_DOMAIN | sed -e 's/^/dc=/' -e 's/\./,dc=/g'`
-netbios=`echo $VM_AD_DOMAIN | sed -e 's/\.//g' | tr '[a-z]' '[A-Z]'`
+VM_DOMAIN=${VM_DOMAIN:-"$domain"}
+lmdn=`echo $VM_DOMAIN | sed -e 's/^\([^.]*\).*$/\1/'`
+suffix=`echo $VM_DOMAIN | sed -e 's/^/dc=/' -e 's/\./,dc=/g'`
+netbios=`echo $VM_DOMAIN | sed -e 's/\.//g' | tr '[a-z]' '[A-Z]'`
 VM_CA_NAME=${VM_CA_NAME:-"$lmdn-$lmhn-ca"}
 VM_AD_SUFFIX=${VM_AD_SUFFIX:-"$suffix"}
 VM_NETBIOS_NAME=${VM_NETBIOS_NAME:-"$netbios"}
@@ -185,7 +219,9 @@ else
     #     $SUDOCMD cp -p $staging/autounattend.xml $staging/unattend.xml
     #     $SUDOCMD virt-copy-in -a $WIN_VM_DISKFILE $staging/unattend.xml /Windows/Panther
     # fi
-    if [ -z "$VI_DEBUG" ] ; then
+    if [ "$VM_DEBUG" = "2" ] ; then
+        echo examine staging $staging
+    else
         rm -rf $staging
     fi
     VI_EXTRAS_CD="--disk path=$EXTRAS_CD_ISO,device=cdrom"
@@ -193,7 +229,24 @@ fi
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
-if [ ! -f $WIN_VM_DISKFILE ] ; then
+if [ -n "$WIN_VM_DISKFILE_BACKING" -a -f "$WIN_VM_DISKFILE_BACKING" ] ; then
+    # use the given diskfile as our backing file
+    # make a new one based on the vm name
+    # NOTE: We cannot create an image which is _smaller_ than the backing image
+    # we have to grab the current size of the backing file, and omit the disk size
+    # argument if VM_DISKSIZE is less than or equal to the backing file size
+    # strip the trailing M, G, etc.
+    bfsize=`$SUDOCMD qemu-img info $WIN_VM_DISKFILE_BACKING | awk '/virtual size/ {print gensub(/[a-zA-Z]/, "", "g", $3)}'`
+    if [ $VM_DISKSIZE -gt $bfsize ] ; then
+        sizearg=${VM_DISKSIZE}G
+    fi
+    $SUDOCMD qemu-img create -f qcow2 -b $WIN_VM_DISKFILE_BACKING $WIN_VM_DISKFILE $sizearg
+    post_disk_image_create $WIN_VM_DISKFILE
+elif [ -f "$WIN_VM_DISKFILE" ] ; then
+    post_disk_image_create $WIN_VM_DISKFILE
+fi
+
+if [ ! -f "$WIN_VM_DISKFILE" ] ; then
     VM_CDROM="--cdrom $WIN_ISO"
 fi
 
@@ -204,13 +257,11 @@ $SUDOCMD virt-install --connect=qemu:///system --hvm \
     --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=qcow2,cache=none \
     $VI_FLOPPY $VI_EXTRAS_CD \
     --network=$VM_NETWORK \
-    $VI_DEBUG --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
+    ${VM_DEBUG:+"-d"} --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
 
 echo now we wait for everything to be set up
-TRIES=100
-SLEEPTIME=30
-ii=0
-SETUPCOMPLETEDN="cn=SetupComplete,cn=Users,$VM_AD_SUFFIX"
+wait_for_completion $VM_NAME $VM_TIMEOUT $VM_WAIT_FILE
+
 if [ -n "$VM_NO_MAC" ] ; then
     # there is no resolvable fqdn for the new host - grab the
     # mac from the domain, then grab the ip from arp
@@ -222,24 +273,6 @@ else
     LDAPURL="ldap://$VM_FQDN"
     LDAPREQCERT=demand
 fi
-while [ $ii -lt $TRIES ] ; do
-    # this will only return success if AD is TLS enabled and the setup complete entry is available
-    if LDAPTLS_REQCERT=never ldapdelete -x -ZZ -H $LDAPURL \
-        -D "$ADMIN_DN" -w "$ADMINPASSWORD" "$SETUPCOMPLETEDN" > /dev/null 2>&1 ; then
-        echo Server is running and configured
-        break
-    else
-        ii=`expr $ii + 1`
-        echo Try $ii - waiting
-        sleep $SLEEPTIME
-    fi
-done
-
-if [ $ii -ge $TRIES ] ; then
-    echo Error: VM AD not responding after $TRIES tries
-    exit 1
-fi
-
 CA_CERT_DN="cn=$VM_CA_NAME,cn=certification authorities,cn=public key services,cn=services,cn=configuration,$VM_AD_SUFFIX"
 
 TMP_CACERT=/tmp/cacert.`date +'%Y%m%d%H%M%S'`.$$.pem
