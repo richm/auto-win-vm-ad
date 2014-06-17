@@ -13,6 +13,7 @@ kvm/qemu virtualization, Windows Server 2008 R2 Enterprise
 Datacenter 64-bit, and Windows Server 2012 Enterprise Datacenter 64-bit
 
 Now supports using Windows disk images, including with backing images.
+WARNING: Using backing images may not work when testing for VM install/setup completion using VM_WAIT_FILE.  On Fedora 20, virt-win-reg --merge will somehow corrupt the registry SOFTWARE hive, leading to hivex errors when using virt-ls and virt-cat to test for existence of the VM_WAIT_FILE.  For now, if you want to reuse a Windows disk image, make a copy, and do not use a backing file (WIN_VM_BACKING_DISKFILE).  This is slower but more robust.
 
 Pre-Requisites
 ==============
@@ -43,6 +44,7 @@ These are the tools I've used so far:
 ** Not sure what other versions contain these
 ** autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts
    depend on this version
+
 * Windows Server 2008 image files
 ** See http://www.freeipa.org/page/Setting_up_Active_Directory_domain_for_testing_purposes
 ** NOTE: This script basically automates those steps
@@ -76,6 +78,11 @@ These are the tools I've used so far:
    The mac address must start with 54:52:00: and must be unique.
    The VM name (name='win2k8') does not have to match the hostname, but it must be
    the same as the VM_NAME parameter (see below)
+*** you can generate a random qemu MAC address like this:
+ gen_virt_mac() {
+    echo 54:52:00`hexdump -n3 -e '/1 ":%02x"' /dev/random`
+ }
+ VM_MAC=`gen_virt_mac`
 *** virsh net-start default - start up virt network
 *** virsh net-dumpxml default - verify that your new host entry is listed
 
@@ -87,7 +94,8 @@ Running
 =======
 
 1) Create your config file using the variables listed below
-2) make-ad-vm.sh windows.conf
+2) Create additional setupscriptN.cmd.in files to be run post-setup
+3) make-ad-vm.sh windows.conf . . . fileN.conf setupscript4.cmd.in ... setupscriptN.cmd.in
 
 There are many, many parameters you can pass as environment variables or
 in a config file.  Parameters passed in the environment override those
@@ -114,12 +122,22 @@ WIN_VM_DISKFILE_BACKING - use this as the backing file for WIN_VM_DISKFILE
 * no default - if you specify this, then this will be the read-onlh "base"
 * image, and WIN_VM_DISKFILE will be the writable image, containing only
 * the changes
+* WARNING: May not work with VM_WAIT_FILE - see above
+VM_WAIT_FILE - The presence of this file is how make-ad-vm.sh knows that
+setup is complete.  The very last setup phase will create a dummy file with
+this name.   
+* default - \\\\installcomplete
+** NOTE: In your config, you must use 4 backslashes for every backslash
+in the real file as it will be in Windows, in order to preserve them through
+all of the layers of shell/sed indirection and processing e.g.
+ VM_WAIT_FILE="\\\\installcomplete"
 VM_RAM - amount of RAM to use for VM, in MB
 * default - 2048 (2GB)
 VM_CPUS - number of CPUs to use for VM
 * default - 2
 VM_DISKSIZE - size of WIN_VM_DISKFILE in GB
 * default - 16
+** NOTE: Windows Server needs a lot of disk space
 ADMINNAME - user of Windows admin account
 * default - Administrator
 ADMINPASSWORD - password for ADMINNAME account
@@ -155,40 +173,66 @@ Windows supports unattended install and setup.  In 2008 and some other
 new-ish versions, this is done via a file called autounattend.xml.
 When Windows boots off of the ISO, it looks for a file called
 autounattend.xml in the root directory of all removable media.  We use
-a virtual CD-ROM as drive E:\ in Windows and put the file there.
+a virtual CD-ROM as drive D:\ or E:\ in Windows and put the file there.
 
 Setup goes through several different phases, or "passes" in Windows
 parlance.  The last pass is oobeSystem.  It is during this pass that
 we set the first of our "callback" scripts, postinstall.cmd.  We first
 set Windows to AutoLogin the Administrator so that we can use the
 FirstLogonCommands and later RunOnce commands, and tell it to
-AutoLogin 999 times.  We use the FirstLogonCommands SynchronousCommand
+AutoLogin up to 999 times.  We use the FirstLogonCommands SynchronousCommand
 to run the postinstall.cmd script.  This activates windows with the
 given PRODUCT_KEY, creates the RunOnce script for the next setup pass
 (setupscript1.cmd), and reboots.
+
+The setupscripts provided by the project, and any that you provide, are
+usually going to be templates (.cmd.in).  The ".in" means that any tokens
+in the file (e.g. @ADMINNAME@) will be replaced with the actual value
+provided in the config (e.g. the value of $ADMINNAME e.g. "Administrator")
+during writing the files to the virtual CD-ROM.  For example, the answerfile
+setupscript1.cmd.in will be written as D:\setupscript1.cmd.  Any text files
+not ending in .in will not have substitution performed on them, but will be
+converted from unix LF to Windows CRLF line endings.  Any non text files
+such as .exe, .msi, etc. will just be copied directly to the virtual CD-ROM.
 
 When using a disk image that has already been setup, it may still run
 the oobe phase.  The sample ad.conf file shows how to use virt-win-reg
 to set the registry after the disk image has been created, to tell
 setup to use the unattend.xml we provide, which will complete the
-unattended setup.
+unattended setup.  For example:
+ [HKLM\SYSTEM\Setup]
+ "UnattendFile"="$SETUP_PATH\\autounattend.xml"
+Where $SETUP_PATH is the virtual CD-ROM drive created by make-ad-vm.sh.
+Using a disk image will also require setting up Windows to do
+AutoAdminLogin:
+ [HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon]
+ "AutoAdminLogon"="1"
+ "DefaultUserName"="$ADMINNAME"
+ "DefaultPassword"="$ADMINPASSWORD"
 
 During setupscript1 pass, setupscript1.cmd uses dcpromo.exe (2008) or
 setupad.ps1 (2012) to setup Active Directory with our chosen domain.
-It also activates Windows with the specified product key.  At the end,
-it creates the RunOnce script for the next setup pass
-(setupscript1.cmd), and tells Windows to reboot in 2 minutes.  Active
-Directory requires a reboot in order to complete the setup process.
+It also activates Windows with the specified product key (if any - the
+2008 evaluation disk images do not require a key, but pay attention to
+the terms of the EULA!).  At the end, it creates the RunOnce script for
+the next setup pass (setupscript1.cmd), and tells Windows to reboot in
+2 minutes.  Active Directory requires a reboot in order to complete the
+setup process.
 
 During the setupscript2 pass at next login, we install and configure
 Certificate Services in Standalone Root CA mode - setupca.vbs /IS
 (2008) or setupca.ps1 (2012) - then set the RunOnce to run
-setupscript.cmd, and reboot again in 2 minutes.
+setupscript3.cmd, and reboot again in 2 minutes.
 
 During the setupscript3 pass at next login, we generate an AD server
 cert request, submit it to the CA, sign it, and install it in the AD
 cert repo, using certreq and certutil.  Once this is done, AD will
 automatically configure itself to be a TLS/SSL server.
+
+If you want to perform additional post-setup tasks, create setupscript files
+starting with number 4 e.g. setupscript4.cmd.in, setupscript5.cmd.in, etc.
+and pass these to make-ad-vm.sh after the config files.  These additional files
+will be placed on the virtual CD-ROM and run.
 
 The different Windows files are:
 PLATFORM.xml - e.g. win2k8x8664.xml - this is copied to the virtual CD-ROM as the main
