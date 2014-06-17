@@ -2,12 +2,26 @@
 
 set -o errexit
 
-for file in "$@" ; do
-    . $file
+# USAGE:
+# $0 file1.conf file2.conf ... fileN.conf setupscript4.cmd.in ... setupscriptN.cmd.in
+while [ -n "$1" ] ; do
+    case "$1" in
+    *.conf) . $1 ; shift ;;
+    *) break ;;
+    esac
 done
 
 if [ -n "$VM_DEBUG" ] ; then
     set -x
+fi
+
+if $SUDOCMD virsh dominfo $VM_NAME ; then
+    echo VM $VM_NAME already exists
+    echo If you want to recreate it, do
+    echo  $SUDOCMD virsh destroy $VM_NAME
+    echo  $SUDOCMD virsh undefine $VM_NAME --remove-all-storage
+    echo and re-run this script
+    exit 0
 fi
 
 MAKE_AD_VM_DIR=${MAKE_AD_VM_DIR:-`dirname $0`}
@@ -29,6 +43,7 @@ VM_NAME=${VM_NAME:-ad}
 WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.qcow2}
 ADMINNAME=${ADMINNAME:-Administrator}
 SETUP_PATH=${SETUP_PATH:-"E:"}
+VM_OS_VARIANT=${VM_OS_VARIANT:-win2k8}
 
 # fix .in files
 do_subst()
@@ -60,7 +75,7 @@ wait_for_completion() {
     slash='\\'
     # wait_file uses windows style paths, but
     # virt-ls needs *nix style paths
-    my_wait_file=`echo "$VM_WAIT_FILE" | tr "$slash" /`
+    my_wait_file=`echo "$VM_WAIT_FILE" | tr -s "$slash" /`
     ii=$VM_TIMEOUT
     while [ $ii -gt 0 ] ; do
         if $SUDOCMD virt-cat -d $VM_NAME "$my_wait_file" > /dev/null 2>&1 ; then
@@ -229,7 +244,7 @@ fi
 
 serialpath=/tmp/serial-`date +'%Y%m%d%H%M%S'`.$$
 
-if [ -n "$WIN_VM_DISKFILE_BACKING" -a -f "$WIN_VM_DISKFILE_BACKING" ] ; then
+if $SUDOCMD test -n "$WIN_VM_DISKFILE_BACKING" -a -f "$WIN_VM_DISKFILE_BACKING" ; then
     # use the given diskfile as our backing file
     # make a new one based on the vm name
     # NOTE: We cannot create an image which is _smaller_ than the backing image
@@ -239,20 +254,24 @@ if [ -n "$WIN_VM_DISKFILE_BACKING" -a -f "$WIN_VM_DISKFILE_BACKING" ] ; then
     bfsize=`$SUDOCMD qemu-img info $WIN_VM_DISKFILE_BACKING | awk '/virtual size/ {print gensub(/[a-zA-Z]/, "", "g", $3)}'`
     if [ $VM_DISKSIZE -gt $bfsize ] ; then
         sizearg=${VM_DISKSIZE}G
+    else
+        echo disk size $VM_DISKSIZE for $WIN_VM_DISKFILE is smaller than the size $bfsize of the backing file $WIN_VM_DISKFILE_BACKING
+        echo the given disk size cannot be smaller than the backing file size
+        echo new vm will use size $bfsize
     fi
     $SUDOCMD qemu-img create -f qcow2 -b $WIN_VM_DISKFILE_BACKING $WIN_VM_DISKFILE $sizearg
     post_disk_image_create $WIN_VM_DISKFILE
-elif [ -f "$WIN_VM_DISKFILE" ] ; then
+elif $SUDOCMD test -n "$WIN_VM_DISKFILE" -a -f "$WIN_VM_DISKFILE" ; then
     post_disk_image_create $WIN_VM_DISKFILE
 fi
 
-if [ ! -f "$WIN_VM_DISKFILE" ] ; then
+if $SUDOCMD test ! -f "$WIN_VM_DISKFILE" ; then
     VM_CDROM="--cdrom $WIN_ISO"
 fi
 
 $SUDOCMD virt-install --connect=qemu:///system --hvm \
     --accelerate --name "$VM_NAME" --ram=$VM_RAM --vcpu=$VM_CPUS \
-    $VM_CDROM --vnc --os-type windows  \
+    $VM_CDROM --vnc --os-variant ${VM_OS_VARIANT}  \
     --serial file,path=$serialpath --serial pty \
     --disk path=$WIN_VM_DISKFILE,bus=ide,size=$VM_DISKSIZE,format=qcow2,cache=none \
     $VI_FLOPPY $VI_EXTRAS_CD \
@@ -260,7 +279,7 @@ $SUDOCMD virt-install --connect=qemu:///system --hvm \
     ${VM_DEBUG:+"-d"} --noautoconsole || { echo error $? from virt-install ; exit 1 ; }
 
 echo now we wait for everything to be set up
-wait_for_completion $VM_NAME $VM_TIMEOUT $VM_WAIT_FILE
+wait_for_completion $VM_NAME $VM_TIMEOUT "$VM_WAIT_FILE"
 
 if [ -n "$VM_NO_MAC" ] ; then
     # there is no resolvable fqdn for the new host - grab the
@@ -270,8 +289,13 @@ if [ -n "$VM_NO_MAC" ] ; then
     LDAPURL="ldap://$ipaddr"
     LDAPREQCERT=never
 else
-    LDAPURL="ldap://$VM_FQDN"
-    LDAPREQCERT=demand
+    # can't use the hostname if using a private network - grab the ip address
+    # from the network
+    if [ -z "$VM_IP" ] ; then
+        VM_IP=`$SUDOCMD virsh net-dumpxml $VM_NETWORK_NAME | grep "'"$VM_NAME"'"|sed "s/^.*ip='\([^']*\)'.*$/\1/"`
+    fi
+    LDAPURL="ldap://$VM_IP"
+    LDAPREQCERT=never
 fi
 CA_CERT_DN="cn=$VM_CA_NAME,cn=certification authorities,cn=public key services,cn=services,cn=configuration,$VM_AD_SUFFIX"
 
