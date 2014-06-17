@@ -44,6 +44,7 @@ WIN_VM_DISKFILE=${WIN_VM_DISKFILE:-$VM_IMG_DIR/$VM_NAME.qcow2}
 ADMINNAME=${ADMINNAME:-Administrator}
 SETUP_PATH=${SETUP_PATH:-"E:"}
 VM_OS_VARIANT=${VM_OS_VARIANT:-win2k8}
+VM_WAIT_FILE=${VM_WAIT_FILE:-"\\\\installcomplete"}
 
 # fix .in files
 do_subst()
