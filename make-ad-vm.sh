@@ -45,6 +45,7 @@ ADMINNAME=${ADMINNAME:-Administrator}
 SETUP_PATH=${SETUP_PATH:-"E:"}
 VM_OS_VARIANT=${VM_OS_VARIANT:-win2k8}
 VM_WAIT_FILE=${VM_WAIT_FILE:-"\\\\installcomplete"}
+VM_TIMEOUT=${VM_TIMEOUT:-120}
 
 # fix .in files
 do_subst()
