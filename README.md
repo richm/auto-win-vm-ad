@@ -18,76 +18,65 @@ WARNING: Using backing images may not work when testing for VM install/setup com
 Pre-Requisites
 ==============
 
-These are the tools I've used so far:
 * Fedora 20 64-bit packages and commands with KVM/QEMU
-| Package            | Commands         | Notes                                                    |
-|--------------------|------------------|----------------------------------------------------------|
-| libvirt-daemon     | libvirtd         | virtual machine service daemon                           |
-| libvirt-client     | virsh            | virtual machine/network management                       |
-| virt-install       | virt-install     | virtual machine creation                                 |
-| libguestfs-tools   | virt-win-reg     | windows vm registry reader                               |
-| libguestfs-tools-c | virt-cat         | used to check for the wait file                          |
-| qemu-system        | qemu-kvm, others | core virt package                                        |
-| openldap-clients   | ldapsearch       | for testing AD connection and getting AD CA cert         |
-| genisoimage        | genisoimage      | for creating the CD-ROM answerfile disk                  |
-| dosfstools         | mkfs.vfat        | OPTIONAL: if you need to make a floppy  based answerfile |
+
+    | Package            | Commands         | Notes                                                    |
+    |--------------------|------------------|----------------------------------------------------------|
+    | libvirt-daemon     | libvirtd         | virtual machine service daemon                           |
+    | libvirt-client     | virsh            | virtual machine/network management                       |
+    | virt-install       | virt-install     | virtual machine creation                                 |
+    | libguestfs-tools   | virt-win-reg     | windows vm registry reader                               |
+    | libguestfs-tools-c | virt-cat         | used to check for the wait file                          |
+    | qemu-system        | qemu-kvm, others | core virt package                                        |
+    | openldap-clients   | ldapsearch       | for testing AD connection and getting AD CA cert         |
+    | genisoimage        | genisoimage      | for creating the CD-ROM answerfile disk                  |
+    | dosfstools         | mkfs.vfat        | OPTIONAL: if you need to make a floppy  based answerfile |
 
 * RHEL 6.x 64-bit with KVM/QEMU
-** qemu-kvm - the basic virtualization packages
-** python-virtinst - virt-install
-** qemu-img
-** libvirt-client - virsh
-** dosfstools - mkfs.vfat
-** openldap-clients - for testing the AD connection and getting the AD CA cert
-** genisoimage - "extras" CD
-** virt-win-reg, virt-cat
+    * qemu-kvm - the basic virtualization packages
+    * python-virtinst - virt-install
+    * qemu-img
+    * libvirt-client - virsh
+    * dosfstools - mkfs.vfat
+    * openldap-clients - for testing the AD connection and getting the AD CA cert
+    * genisoimage - "extras" CD
+    * virt-win-reg, virt-cat
 
-* Make sure libvirtd is running::
+* Make sure libvirtd is running
 
     # systemctl start libvirtd.service
     OR
     # service libvirtd start
 
 * en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso
-** an MSDN subscription is required for access to Windows ISO files
-   and product keys
-** I know 2008 R2 Enterprise Datacenter comes with Active Directory
-   and Certificate Services
-** Not sure what other versions contain these
-** autounattend.xml, dcinstall.ini, adcertreq.inf, and the cmd scripts
-   depend on this version
+    * an MSDN subscription is required for access to Windows ISO files and product keys
+    * I know 2008 R2 Enterprise Datacenter comes with Active Directory and Certificate Services
+    * Not sure what other versions contain these
+    * autounattend.xml, dcinstall.ini, adcertreq.inf, and the cmd scripts depend on this version
 * en_windows_server_2012_x64_dvd_915478.iso
-** an MSDN subscription is required for access to Windows ISO files
-   and product keys
-** I know 2012 Datacenter comes with Active Directory and Certificate Services
-** Not sure what other versions contain these
-** autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts
-   depend on this version
+    * an MSDN subscription is required for access to Windows ISO files and product keys
+    * I know 2012 Datacenter comes with Active Directory and Certificate Services
+    * Not sure what other versions contain these
+    * autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts depend on this version
 
 * Windows Server 2008 image files
-** See http://www.freeipa.org/page/Setting_up_Active_Directory_domain_for_testing_purposes
-** NOTE: This script basically automates those steps
-** Use 'unar' instead of 'unrar' on Fedora 20
+    * See http://www.freeipa.org/page/Setting_up_Active_Directory_domain_for_testing_purposes
+    * NOTE: This script basically automates those steps
+    * Use 'unar' instead of 'unrar' on Fedora 20
 
 * KVM/Machine setup
-** In addition to the below, you can create a new virtual network with
-   (e.g. virsh net-define and net-start), and pass in the name of the
-   network using VM_NETWORK_NAME
-   - advantage - no messing around with your system
-   - disadvantage - host resolution doesn't just work automatically
-                    need to use the IP address of the network e.g.
-                    $ dig @192.168.122.1 ad.domain.local
-** In order to easily keep track of the VM hostname/IP address I have
-   done the following:
-** edit /etc/hosts - assign an IP address and FQDN for the VM
-   e.g. something like this:
- 192.168.122.2 ad.test.example.com ad
-** The FQDN must be the first one listed (just like for SSL/Kerberos
-   testing)
-** add your new vm/ip addr/mac address
-*** virsh net-destroy default - virt network must be stopped first
-*** virsh net-edit default - add a name, the IP address from above, and
-    a unique MAC address to the <dhcp> section like this::
+    * In addition to the below, you can create a new virtual network with (e.g. virsh net-define and net-start), and pass in the name of the network using VM_NETWORK_NAME
+      * advantage - no messing around with your system
+      * disadvantage - host resolution doesn't just work automatically; need to use the IP address of the network e.g. `$ dig @192.168.122.1 ad.domain.local`
+    * In order to easily keep track of the VM hostname/IP address I have done the following:
+    * edit /etc/hosts - assign an IP address and FQDN for the VM e.g. something like this
+
+    192.168.122.2 ad.test.example.com ad
+
+    * The FQDN must be the first one listed (just like for SSL/Kerberos testing)
+    * add your new vm/ip addr/mac address
+        * virsh net-destroy default - virt network must be stopped first
+        * virsh net-edit default - add a name, the IP address from above, and a unique MAC address to the <dhcp> section like this
 
     <mac address='52:54:00:xx:xx:xx'/>
     <ip address='192.168.122.1' netmask='255.255.255.0'>
@@ -95,19 +84,18 @@ These are the tools I've used so far:
         <range start='192.168.122.128' end='192.168.122.254' />
         <host mac='54:52:00:xx:yy:zz' name='win2k8' ip='192.168.122.2' />
 
-   That is, add a new <host ...> entry with a unique IP address and mac address
-   The mac address must start with 54:52:00: and must be unique.
-   The VM name (name='win2k8') does not have to match the hostname, but it must be
-   the same as the VM_NAME parameter (see below)
-*** you can generate a random qemu MAC address like this::
+        * That is, add a new <host ...> entry with a unique IP address and mac address
+        * The mac address must start with 54:52:00: and must be unique.
+        * The VM name (name='win2k8') does not have to match the hostname, but it must be the same as the VM_NAME parameter (see below)
+        * you can generate a random qemu MAC address like this
 
     gen_virt_mac() {
       echo 54:52:00`hexdump -n3 -e '/1 ":%02x"' /dev/random`
     }
     VM_MAC=`gen_virt_mac`
 
-*** virsh net-start default - start up virt network
-*** virsh net-dumpxml default - verify that your new host entry is listed
+        * virsh net-start default - start up virt network
+        * virsh net-dumpxml default - verify that your new host entry is listed
 
 You will need to provide at least the name of the VM to the script.
 The script will attempt to find the FQDN, the IP address, and the MAC
@@ -116,9 +104,9 @@ address (or you can provide these).
 Running
 =======
 
-1) Create your config file using the variables listed below
-2) Create additional setupscriptN.cmd.in files to be run post-setup
-3) make-ad-vm.sh windows.conf . . . fileN.conf setupscript4.cmd.in ... setupscriptN.cmd.in
+1. Create your config file using the variables listed below
+2. Create additional setupscriptN.cmd.in files to be run post-setup
+3. make-ad-vm.sh windows.conf . . . fileN.conf setupscript4.cmd.in ... setupscriptN.cmd.in
 
 There are many, many parameters you can pass as environment variables or
 in a config file.  Parameters passed in the environment override those
@@ -152,7 +140,7 @@ this name.
 * default - \\\\installcomplete
 ** NOTE: In your config, you must use 4 backslashes for every backslash
 in the real file as it will be in Windows, in order to preserve them through
-all of the layers of shell/sed indirection and processing e.g.::
+all of the layers of shell/sed indirection and processing e.g.
 
     VM_WAIT_FILE="\\\\installcomplete"
 
@@ -224,14 +212,14 @@ When using a disk image that has already been setup, it may still run
 the oobe phase.  The sample ad.conf file shows how to use virt-win-reg
 to set the registry after the disk image has been created, to tell
 setup to use the unattend.xml we provide, which will complete the
-unattended setup.  For example::
+unattended setup.  For example
 
     [HKLM\SYSTEM\Setup]
     "UnattendFile"="$SETUP_PATH\\autounattend.xml"
 
 Where $SETUP_PATH is the virtual CD-ROM drive created by make-ad-vm.sh.
 Using a disk image will also require setting up Windows to do
-AutoAdminLogin::
+AutoAdminLogin
 
     [HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon]
     "AutoAdminLogon"="1"
