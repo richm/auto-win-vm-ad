@@ -134,10 +134,10 @@ in a config file.
     * no default - if you specify this, then this will be the read-only "base" image, and `WIN_VM_DISKFILE` will be the writable image, containing only the changes
     * WARNING: May not work with `VM_WAIT_FILE` - see above
 * `VM_WAIT_FILE` - The presence of this file is how `make-ad-vm.sh` knows that setup is complete.  The very last setup phase will create a dummy file with this name.   
-    * default - `\\\\\\\\installcomplete`
+    * default - `\\\\installcomplete`
     * NOTE: In your config, you must use 4 backslashes for every backslash in the real file as it will be in Windows, in order to preserve them through all of the layers of shell/sed indirection and processing e.g.
             
-                VM_WAIT_FILE="\\\\\\\\installcomplete"
+                VM_WAIT_FILE="\\\\installcomplete"
             
 * `VM_RAM` - amount of RAM to use for VM, in MB
     * default - 2048 (2GB)
