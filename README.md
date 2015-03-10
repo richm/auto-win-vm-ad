@@ -19,7 +19,20 @@ Pre-Requisites
 ==============
 
 These are the tools I've used so far:
-* RHEL 6.x and Fedora 20 64-bit with KVM/QEMU
+* Fedora 20 64-bit packages and commands with KVM/QEMU
+| Package            | Commands         | Notes                                                    |
+|--------------------|------------------|----------------------------------------------------------|
+| libvirt-daemon     | libvirtd         | virtual machine service daemon                           |
+| libvirt-client     | virsh            | virtual machine/network management                       |
+| virt-install       | virt-install     | virtual machine creation                                 |
+| libguestfs-tools   | virt-win-reg     | windows vm registry reader                               |
+| libguestfs-tools-c | virt-cat         | used to check for the wait file                          |
+| qemu-system        | qemu-kvm, others | core virt package                                        |
+| openldap-clients   | ldapsearch       | for testing AD connection and getting AD CA cert         |
+| genisoimage        | genisoimage      | for creating the CD-ROM answerfile disk                  |
+| dosfstools         | mkfs.vfat        | OPTIONAL: if you need to make a floppy  based answerfile |
+
+* RHEL 6.x 64-bit with KVM/QEMU
 ** qemu-kvm - the basic virtualization packages
 ** python-virtinst - virt-install
 ** qemu-img
@@ -28,6 +41,12 @@ These are the tools I've used so far:
 ** openldap-clients - for testing the AD connection and getting the AD CA cert
 ** genisoimage - "extras" CD
 ** virt-win-reg, virt-cat
+
+* Make sure libvirtd is running::
+
+    # systemctl start libvirtd.service
+    OR
+    # service libvirtd start
 
 * en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso
 ** an MSDN subscription is required for access to Windows ISO files
@@ -68,21 +87,25 @@ These are the tools I've used so far:
 ** add your new vm/ip addr/mac address
 *** virsh net-destroy default - virt network must be stopped first
 *** virsh net-edit default - add a name, the IP address from above, and
-    a unique MAC address to the <dhcp> section like this:
-   <mac address='52:54:00:xx:xx:xx'/>
-   <ip address='192.168.122.1' netmask='255.255.255.0'>
-     <dhcp>
-       <range start='192.168.122.128' end='192.168.122.254' />
-       <host mac='54:52:00:xx:yy:zz' name='win2k8' ip='192.168.122.2' />
+    a unique MAC address to the <dhcp> section like this::
+
+    <mac address='52:54:00:xx:xx:xx'/>
+    <ip address='192.168.122.1' netmask='255.255.255.0'>
+      <dhcp>
+        <range start='192.168.122.128' end='192.168.122.254' />
+        <host mac='54:52:00:xx:yy:zz' name='win2k8' ip='192.168.122.2' />
+
    That is, add a new <host ...> entry with a unique IP address and mac address
    The mac address must start with 54:52:00: and must be unique.
    The VM name (name='win2k8') does not have to match the hostname, but it must be
    the same as the VM_NAME parameter (see below)
-*** you can generate a random qemu MAC address like this:
- gen_virt_mac() {
-    echo 54:52:00`hexdump -n3 -e '/1 ":%02x"' /dev/random`
- }
- VM_MAC=`gen_virt_mac`
+*** you can generate a random qemu MAC address like this::
+
+    gen_virt_mac() {
+      echo 54:52:00`hexdump -n3 -e '/1 ":%02x"' /dev/random`
+    }
+    VM_MAC=`gen_virt_mac`
+
 *** virsh net-start default - start up virt network
 *** virsh net-dumpxml default - verify that your new host entry is listed
 
@@ -129,8 +152,10 @@ this name.
 * default - \\\\installcomplete
 ** NOTE: In your config, you must use 4 backslashes for every backslash
 in the real file as it will be in Windows, in order to preserve them through
-all of the layers of shell/sed indirection and processing e.g.
- VM_WAIT_FILE="\\\\installcomplete"
+all of the layers of shell/sed indirection and processing e.g.::
+
+    VM_WAIT_FILE="\\\\installcomplete"
+
 VM_RAM - amount of RAM to use for VM, in MB
 * default - 2048 (2GB)
 VM_CPUS - number of CPUs to use for VM
@@ -199,16 +224,19 @@ When using a disk image that has already been setup, it may still run
 the oobe phase.  The sample ad.conf file shows how to use virt-win-reg
 to set the registry after the disk image has been created, to tell
 setup to use the unattend.xml we provide, which will complete the
-unattended setup.  For example:
- [HKLM\SYSTEM\Setup]
- "UnattendFile"="$SETUP_PATH\\autounattend.xml"
+unattended setup.  For example::
+
+    [HKLM\SYSTEM\Setup]
+    "UnattendFile"="$SETUP_PATH\\autounattend.xml"
+
 Where $SETUP_PATH is the virtual CD-ROM drive created by make-ad-vm.sh.
 Using a disk image will also require setting up Windows to do
-AutoAdminLogin:
- [HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon]
- "AutoAdminLogon"="1"
- "DefaultUserName"="$ADMINNAME"
- "DefaultPassword"="$ADMINPASSWORD"
+AutoAdminLogin::
+
+    [HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon]
+    "AutoAdminLogon"="1"
+    "DefaultUserName"="$ADMINNAME"
+    "DefaultPassword"="$ADMINPASSWORD"
 
 During setupscript1 pass, setupscript1.cmd uses dcpromo.exe (2008) or
 setupad.ps1 (2012) to setup Active Directory with our chosen domain.
