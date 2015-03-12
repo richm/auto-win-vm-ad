@@ -27,7 +27,7 @@ Fedora 20 64-bit packages and commands with KVM/QEMU
     | virt-install       | virt-install     | virtual machine creation                                |
     | libguestfs-tools   | virt-win-reg     | windows vm registry reader                              |
     | libguestfs-tools-c | virt-cat         | used to check for the wait file                         |
-    | qemu-system        | qemu-kvm, others | core virt package                                       |
+    | qemu-kvm           | qemu-kvm, others | core virt package                                       |
     | openldap-clients   | ldapsearch       | for testing AD connection and getting AD CA cert        |
     | genisoimage        | genisoimage      | for creating the CD-ROM answerfile disk                 |
     | dosfstools         | mkfs.vfat        | OPTIONAL: if you need to make a floppy based answerfile |
