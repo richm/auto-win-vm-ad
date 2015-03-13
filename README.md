@@ -22,7 +22,7 @@ Fedora 20 64-bit packages and commands with KVM/QEMU
 
     | Package            | Commands         | Notes                                                   |
     |--------------------|------------------|---------------------------------------------------------|
-    | libvirt-daemon     | libvirtd         | virtual machine service daemon                          |
+    | libvirt            | libvirtd, others | virtual machine service daemon                          |
     | libvirt-client     | virsh            | virtual machine/network management                      |
     | virt-install       | virt-install     | virtual machine creation                                |
     | libguestfs-tools   | virt-win-reg     | windows vm registry reader                              |
