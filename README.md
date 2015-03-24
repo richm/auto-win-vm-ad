@@ -50,13 +50,21 @@ Make sure libvirtd is running
     # service libvirtd start
 
 * `en_windows_server_2008_r2_standard_enterprise_datacenter_web_x64_dvd_x15-50365.iso`
+    * `WIN_VER_REL_ARCH=win2k8x8664`
     * an MSDN subscription is required for access to Windows ISO files and product keys
     * I know 2008 R2 Enterprise Datacenter comes with Active Directory and Certificate Services
     * Not sure what other versions contain these
     * autounattend.xml, dcinstall.ini, adcertreq.inf, and the cmd scripts depend on this version
 * `en_windows_server_2012_x64_dvd_915478.iso`
+    * `WIN_VER_REL_ARCH=win2012x8664`
     * an MSDN subscription is required for access to Windows ISO files and product keys
     * I know 2012 Datacenter comes with Active Directory and Certificate Services
+    * Not sure what other versions contain these
+    * autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts depend on this version
+* `en_windows_server_2012_r2_with_update_x64_dvd_6052708.iso`
+    * `WIN_VER_REL_ARCH=win2012x8664r2`
+    * an MSDN subscription is required for access to Windows ISO files and product keys
+    * I know 2012 Datacenter R2 comes with Active Directory and Certificate Services
     * Not sure what other versions contain these
     * autounattend.xml, setupad.ps1, setupca.ps1, adcertreq.inf, and the cmd scripts depend on this version
 
