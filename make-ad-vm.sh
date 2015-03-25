@@ -160,6 +160,14 @@ if [ -z "$AD_FOREST_LEVEL" -o -z "$AD_DOMAIN_LEVEL" ] ; then
     esac
 fi
 
+if [ -d $ANS_FILE_DIR/$WIN_VER_REL_ARCH ] ; then
+    WIN_VER_REL_ARCH_DIR=$ANS_FILE_DIR/$WIN_VER_REL_ARCH
+else
+    case $WIN_VER_REL_ARCH in
+    win2012*) WIN_VER_REL_ARCH_DIR=$ANS_FILE_DIR/win2012x8664 ;;
+    esac
+fi
+
 if [ -n "$USE_FLOPPY" ] ; then
     if [ ! -f $ANS_FLOPPY ] ; then
         $SUDOCMD mkfs.vfat -C $ANS_FLOPPY 1440 || { echo error $? from mkfs.vfat -C $ANS_FLOPPY 1440 ; exit 1 ; }
@@ -176,7 +184,7 @@ if [ -n "$USE_FLOPPY" ] ; then
     # files in answerfiles/winverrel/ will override files in answerfiles/ if
     # they have the same name - this allow to provide version specific files
     # to override the more general ones in answerfiles/
-    for file in $ANS_FILE_DIR/* $ANS_FILE_DIR/$WIN_VER_REL_ARCH/* "$@" ; do
+    for file in $ANS_FILE_DIR/* $WIN_VER_REL_ARCH_DIR/* "$@" ; do
         if [ ! -f "$file" ] ; then continue ; fi
         err=
         case $file in
@@ -201,7 +209,7 @@ else
     # they have the same name - this allow to provide version specific files
     # to override the more general ones in answerfiles/
     staging=`mktemp -d`
-    for file in $ANS_FILE_DIR/* $ANS_FILE_DIR/$WIN_VER_REL_ARCH/* "$@" ; do
+    for file in $ANS_FILE_DIR/* $WIN_VER_REL_ARCH_DIR/* "$@" ; do
         if [ ! -f "$file" ] ; then continue ; fi
         err=
         case $file in
@@ -283,6 +291,7 @@ $SUDOCMD virt-install --connect=qemu:///system --hvm \
 echo now we wait for everything to be set up
 wait_for_completion $VM_NAME $VM_TIMEOUT "$VM_WAIT_FILE"
 
+LDAPREQCERT=demand
 if [ -n "$VM_NO_MAC" ] ; then
     # there is no resolvable fqdn for the new host - grab the
     # mac from the domain, then grab the ip from arp
@@ -318,7 +327,6 @@ else
     echo Error: the CA cert in $TMP_CACERT is not working
     LDAPTLS_REQCERT=$LDAPREQCERT LDAPTLS_CACERT=$TMP_CACERT ldapsearch -d 1 -xLLL -ZZ -H $LDAPURL -s base \
         -b "" "objectclass=*" currenttime
-    exit 1
 fi
 
 if [ -n "$WIN_CA_CERT_FILE" ] ; then
