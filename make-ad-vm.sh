@@ -153,6 +153,8 @@ if [ -z "$AD_FOREST_LEVEL" -o -z "$AD_DOMAIN_LEVEL" ] ; then
     case $WIN_VER_REL_ARCH in
     win2k8*) AD_FOREST_LEVEL=${AD_FOREST_LEVEL:-4}
              AD_DOMAIN_LEVEL=${AD_DOMAIN_LEVEL:-4} ;;
+    win2012r2) AD_FOREST_LEVEL=${AD_FOREST_LEVEL:-Win2012R2}
+              AD_DOMAIN_LEVEL=${AD_DOMAIN_LEVEL:-Win2012R2} ;;
     win2012*) AD_FOREST_LEVEL=${AD_FOREST_LEVEL:-Win2012}
               AD_DOMAIN_LEVEL=${AD_DOMAIN_LEVEL:-Win2012} ;;
     *) echo Error: unknown windows version $WIN_VER_REL_ARCH
